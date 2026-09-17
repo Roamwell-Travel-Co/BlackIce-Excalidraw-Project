@@ -5,16 +5,17 @@
 <title>Reconnect Prompt — Mockup</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
 <style>
   :root {
     --color-primary: #6965db;
     --island-bg: #ffffff;
-    --border-color: #1b1b1f;
-    --text-primary: #1b1b1f;
-    --text-muted: #6b6b76;
+    --border-color: #1e1e2c;
+    --divider-color: #343a45;
+    --text-primary: #1e1e2c;
+    --text-muted: #57575f;
     --pill-bg: #ecebfd;
-    --dropbox-bg: #f5f5fa;
+    --dropbox-bg: #f1f0f7;
   }
 
   * { box-sizing: border-box; }
@@ -26,20 +27,21 @@
     align-items: center;
     justify-content: center;
     background: #eceef3;
-    font-family: "Kalam", cursive;
+    font-family: "Patrick Hand", cursive;
     padding: 24px;
   }
 
-  /* NOTE: "Kalam" stands in for Excalidraw's real hand-drawn font
-     (Virgil/Excalifont, a private asset). Once this lives inside the real
+  /* NOTE: "Patrick Hand" stands in for Excalidraw's real hand-drawn font
+     (Virgil/Excalifont, a private asset) — upright, not cursive/joined,
+     which is the closer visual match. Once this lives inside the real
      app it inherits the app's actual font automatically — no CSS needed. */
 
   .popup {
     width: 400px;
     max-width: 100%;
     background: var(--island-bg);
-    border: 2px solid var(--border-color);
-    border-radius: 24px;
+    border: 3px solid var(--border-color);
+    border-radius: 18px;
     box-shadow: 0 12px 32px rgba(20, 20, 30, 0.16);
     padding: 24px 24px 20px;
     position: relative;
@@ -53,15 +55,14 @@
 
   .popup__close {
     position: absolute;
-    top: 18px;
-    right: 20px;
+    top: 20px;
+    right: 22px;
     background: none;
     border: none;
-    font-size: 20px;
-    line-height: 1;
+    padding: 0;
     cursor: pointer;
     color: var(--text-primary);
-    font-family: inherit;
+    line-height: 0;
   }
 
   .popup__title {
@@ -117,24 +118,23 @@
   .checklist__box {
     width: 18px;
     height: 18px;
-    border-radius: 5px;
+    border-radius: 50%;
     border: 2px solid var(--text-primary);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
     flex-shrink: 0;
   }
 
   .checklist__box--done {
-    background: #40c057;
+    border-radius: 5px;
+    background: #d3f9d8;
     border-color: #40c057;
-    color: white;
   }
 
   .divider {
     border: none;
-    border-top: 2px solid #e4e4ea;
+    border-top: 1.5px solid var(--divider-color);
     margin: 18px 0;
   }
 
@@ -234,7 +234,9 @@
 <body>
   <div>
     <div class="popup" role="dialog" aria-labelledby="popup-title">
-      <button class="popup__close" aria-label="Close">✕</button>
+      <button class="popup__close" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="4" y1="4" x2="20" y2="20"></line><line x1="20" y1="4" x2="4" y2="20"></line></svg>
+      </button>
       <h2 class="popup__title" id="popup-title">Design Sprint — Round 1</h2>
 
       <div class="collaborators">
@@ -248,7 +250,9 @@
 
       <div class="checklist">
         <div class="checklist__item">
-          <span class="checklist__box checklist__box--done">✓</span>
+          <span class="checklist__box checklist__box--done">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#2f9e44" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
           Brainstorm
         </div>
         <div class="checklist__item">
@@ -263,13 +267,20 @@
 
       <hr class="divider" />
 
-      <div class="section-label">📅 Next session</div>
+      <div class="section-label">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        Next session
+      </div>
       <div class="next-session__pill">Wireframes</div>
       <p class="next-session__desc">Pick up where you left off with your team.</p>
 
       <hr class="divider" />
 
-      <div class="section-label">🗂️ Drop box ⓘ</div>
+      <div class="section-label">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l2-3h14l2 3"></path><path d="M3 7v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7"></path><line x1="3" y1="7" x2="21" y2="7"></line></svg>
+        Drop box
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+      </div>
       <div class="dropbox-card">
         <span class="dropbox-card__icon"></span>
         <div class="dropbox-card__text">
@@ -283,7 +294,8 @@
     </div>
     <p class="meta-note">
       Mockup only — sized to real popup dimensions (400px). Not wired to live data yet.
-      Font shown is a stand-in for Excalidraw's real hand-drawn font.
+      Font shown ("Patrick Hand") is the closest upright Google Font stand-in for
+      Excalidraw's real hand-drawn font (Virgil/Excalifont, a private asset).
     </p>
   </div>
 </body>
