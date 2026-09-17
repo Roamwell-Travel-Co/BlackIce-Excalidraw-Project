@@ -22,6 +22,11 @@ Each person builds on their own branch and opens a PR into `main` when ready for
 3. Open a PR into `main` before merging. No direct pushes to `main`.
 4. Track PR status in `#black-ice-builds` on Slack.
 
+> Build/CI notifications from this repo now post automatically to
+> `#black-ice-builds` via the GitHub for Slack integration (set up
+> 2026-09-16). See the docs repo's `decisions/decisions-log.md`
+> (Decision 001) and `monitoring-observability/alerting.md` for detail.
+
 ## Getting started
 
 The `excalidraw/` folder is a snapshot of the real Excalidraw codebase (MIT-licensed, imported from [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw)) — this is our own independent copy to build on, separate from the original project.
