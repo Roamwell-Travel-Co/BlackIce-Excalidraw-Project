@@ -11,6 +11,7 @@ What can we do to make a guest's first collaborative session turn into a second 
 - **Marc** — `marc` branch
 - **Chris** — `chris` branch
 - **Lola** — `lola` branch
+- **Juan** — `juan` branch
 
 Each person builds on their own branch and opens a PR into `main` when ready for review. Marc may split off an additional branch for a more technical exploration — keep it prefixed `marc/` (e.g. `marc/api-spike`) so it's clear it's his.
 
