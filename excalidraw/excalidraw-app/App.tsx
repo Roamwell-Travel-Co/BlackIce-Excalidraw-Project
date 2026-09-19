@@ -149,6 +149,8 @@ import DebugCanvas, {
 } from "./components/DebugCanvas";
 import { useSimulatedCollaborators } from "./debugCollaborators";
 import { AIComponents } from "./components/AI";
+import { ReconnectPrompt } from "./components/ReconnectPrompt/ReconnectPrompt";
+import { ReconnectNudgeWatcher } from "./components/ReconnectPrompt/ReconnectNudgeWatcher";
 import { ExcalidrawPlusIframeExport } from "./ExcalidrawPlusIframeExport";
 
 import "./index.scss";
@@ -1213,6 +1215,8 @@ const ExcalidrawWrapper = () => {
         </OverwriteConfirmDialog>
         <AppFooter onChange={() => excalidrawAPI?.refresh()} />
         {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
+        {excalidrawAPI && <ReconnectPrompt excalidrawAPI={excalidrawAPI} />}
+        <ReconnectNudgeWatcher />
 
         <TTDDialogTrigger />
         {isCollaborating && isOffline && (
