@@ -15,6 +15,7 @@ import {
   DEFAULT_CATEGORIES,
 } from "@excalidraw/excalidraw/components/CommandPalette/CommandPalette";
 import { ErrorDialog } from "@excalidraw/excalidraw/components/ErrorDialog";
+import { Button } from "@excalidraw/excalidraw/components/Button";
 import { OverwriteConfirmDialog } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirm";
 import { openConfirmModal } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirmState";
 import { ShareableLinkDialog } from "@excalidraw/excalidraw/components/ShareableLinkDialog";
@@ -110,6 +111,7 @@ import { TopErrorBoundary } from "./components/TopErrorBoundary";
 
 import {
   exportToBackend,
+  getCollaborationLink,
   getCollaborationLinkData,
   importFromBackend,
   isCollaborationLink,
@@ -121,6 +123,11 @@ import {
   importFromLocalStorage,
   importUsernameFromLocalStorage,
 } from "./data/localStorage";
+import {
+  getRememberedCollaboration,
+  forgetRememberedCollaboration,
+  rememberCollaboration,
+} from "./data/rememberedCollaboration";
 
 import { loadFilesFromFirebase } from "./data/firebase";
 import {
@@ -142,6 +149,8 @@ import DebugCanvas, {
 } from "./components/DebugCanvas";
 import { useSimulatedCollaborators } from "./debugCollaborators";
 import { AIComponents } from "./components/AI";
+import { ReconnectPrompt } from "./components/ReconnectPrompt/ReconnectPrompt";
+import { ReconnectNudgeWatcher } from "./components/ReconnectPrompt/ReconnectNudgeWatcher";
 import { ExcalidrawPlusIframeExport } from "./ExcalidrawPlusIframeExport";
 
 import "./index.scss";
@@ -213,6 +222,14 @@ const shareableLinkConfirmDialog = {
   actionLabel: t("overwriteConfirm.modal.shareableLink.button"),
   color: "danger",
 } as const;
+
+const getCollaborationSignature = ({
+  roomId,
+  roomKey,
+}: {
+  roomId: string;
+  roomKey: string;
+}) => `${roomId}:${roomKey}`;
 
 const initializeScene = async (opts: {
   collabAPI: CollabAPI | null;
@@ -390,6 +407,8 @@ const ExcalidrawWrapper = () => {
   const initialStatePromiseRef = useRef<{
     promise: ResolvablePromise<ExcalidrawInitialDataState | null>;
   }>({ promise: null! });
+  const rememberPromptTimerRef = useRef<number | null>(null);
+  const suppressedRememberPromptRef = useRef<string | null>(null);
   if (!initialStatePromiseRef.current.promise) {
     initialStatePromiseRef.current.promise =
       resolvablePromise<ExcalidrawInitialDataState | null>();
@@ -412,6 +431,130 @@ const ExcalidrawWrapper = () => {
   });
   const collabError = useAtomValue(collabErrorIndicatorAtom);
   const userToFollow = useAtomValue(userToFollowAtom);
+  const [rememberedCollaboration, setRememberedCollaboration] = useState(() =>
+    getRememberedCollaboration(),
+  );
+
+  const offerRememberCollaboration = useCallback(() => {
+    if (!excalidrawAPI) {
+      return;
+    }
+
+    if (rememberPromptTimerRef.current !== null) {
+      window.clearTimeout(rememberPromptTimerRef.current);
+    }
+
+    // Collaboration startup can update the editor state after its promise
+    // resolves. Defer this non-blocking prompt until that work has settled so
+    // the editor doesn't replace it before the guest can act on it.
+    rememberPromptTimerRef.current = window.setTimeout(() => {
+      rememberPromptTimerRef.current = null;
+
+      const roomLinkData = getCollaborationLinkData(window.location.href);
+      if (!roomLinkData) {
+        suppressedRememberPromptRef.current = null;
+        return;
+      }
+
+      if (
+        suppressedRememberPromptRef.current ===
+        getCollaborationSignature(roomLinkData)
+      ) {
+        return;
+      }
+
+      const rememberedCollaboration = getRememberedCollaboration();
+      if (
+        rememberedCollaboration?.roomId === roomLinkData.roomId &&
+        rememberedCollaboration.roomKey === roomLinkData.roomKey
+      ) {
+        return;
+      }
+
+      excalidrawAPI.setToast({
+        message: (
+          <div
+            style={{
+              alignItems: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.5rem",
+            }}
+          >
+            <span>{t("jumpBackIn.rememberPrompt")}</span>
+            <Button
+              aria-label={t("jumpBackIn.rememberAction")}
+              style={{
+                backgroundColor: "transparent",
+                border: "none",
+                color: "var(--text-primary-color)",
+                gap: "0.5rem",
+                height: "auto",
+                padding: "0.25rem 0.5rem",
+                pointerEvents: "auto",
+                width: "auto",
+              }}
+              onSelect={() => {
+                const record = rememberCollaboration(roomLinkData);
+                setRememberedCollaboration(record);
+                excalidrawAPI.setToast({
+                  message: record
+                    ? t("jumpBackIn.rememberedConfirmation")
+                    : t("jumpBackIn.rememberError"),
+                  closable: true,
+                });
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  backgroundColor: "var(--color-primary)",
+                  borderRadius: "0.25rem",
+                  display: "block",
+                  height: "0.875rem",
+                  width: "0.875rem",
+                }}
+              />
+              <span>{t("jumpBackIn.rememberAction")}</span>
+            </Button>
+          </div>
+        ),
+        closable: true,
+        duration: Infinity,
+      });
+    }, 1000);
+  }, [excalidrawAPI]);
+
+  useEffect(() => {
+    return () => {
+      if (rememberPromptTimerRef.current !== null) {
+        window.clearTimeout(rememberPromptTimerRef.current);
+      }
+    };
+  }, []);
+
+  const jumpBackIn = useCallback(() => {
+    if (!rememberedCollaboration) {
+      return;
+    }
+
+    window.location.assign(getCollaborationLink(rememberedCollaboration));
+  }, [rememberedCollaboration]);
+
+  const forgetCollaboration = useCallback(() => {
+    const roomLinkData = getCollaborationLinkData(window.location.href);
+    if (roomLinkData) {
+      suppressedRememberPromptRef.current =
+        getCollaborationSignature(roomLinkData);
+    }
+    if (rememberPromptTimerRef.current !== null) {
+      window.clearTimeout(rememberPromptTimerRef.current);
+      rememberPromptTimerRef.current = null;
+    }
+    forgetRememberedCollaboration();
+    setRememberedCollaboration(null);
+    excalidrawAPI?.setToast(null);
+  }, [excalidrawAPI]);
 
   const viewportStatusFrame = useMemo(
     () =>
@@ -565,6 +708,7 @@ const ExcalidrawWrapper = () => {
     initializeScene({ collabAPI, excalidrawAPI }).then(async (data) => {
       loadImages(data, /* isInitialLoad */ true);
       initialStatePromiseRef.current.promise.resolve(data.scene);
+      offerRememberCollaboration();
     });
 
     const onHashChange = async (event: HashChangeEvent) => {
@@ -590,6 +734,7 @@ const ExcalidrawWrapper = () => {
               captureUpdate: CaptureUpdateAction.IMMEDIATELY,
             });
           }
+          offerRememberCollaboration();
         });
       }
     };
@@ -685,7 +830,14 @@ const ExcalidrawWrapper = () => {
         false,
       );
     };
-  }, [isCollabDisabled, collabAPI, excalidrawAPI, setLangCode, loadImages]);
+  }, [
+    isCollabDisabled,
+    collabAPI,
+    excalidrawAPI,
+    setLangCode,
+    loadImages,
+    offerRememberCollaboration,
+  ]);
 
   useEffect(() => {
     const unloadHandler = (event: BeforeUnloadEvent) => {
@@ -1029,8 +1181,11 @@ const ExcalidrawWrapper = () => {
       >
         <AppMainMenu
           onCollabDialogOpen={onCollabDialogOpen}
+          onJumpBackIn={jumpBackIn}
+          onForgetCollaboration={forgetCollaboration}
           isCollaborating={isCollaborating}
           isCollabEnabled={!isCollabDisabled}
+          rememberedCollaboration={rememberedCollaboration}
           theme={appTheme}
           refresh={() => forceRefresh((prev) => !prev)}
         />
@@ -1060,6 +1215,8 @@ const ExcalidrawWrapper = () => {
         </OverwriteConfirmDialog>
         <AppFooter onChange={() => excalidrawAPI?.refresh()} />
         {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
+        {excalidrawAPI && <ReconnectPrompt excalidrawAPI={excalidrawAPI} />}
+        <ReconnectNudgeWatcher />
 
         <TTDDialogTrigger />
         {isCollaborating && isOffline && (
