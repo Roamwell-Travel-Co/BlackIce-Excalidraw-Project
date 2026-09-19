@@ -107,6 +107,7 @@ import {
   exportToExcalidrawPlus,
 } from "./components/ExportToExcalidrawPlus";
 import { TopErrorBoundary } from "./components/TopErrorBoundary";
+import { SaveMyWorkTrigger } from "./components/SaveMyWorkTrigger";
 
 import {
   exportToBackend,
@@ -130,6 +131,7 @@ import {
   localStorageQuotaExceededAtom,
 } from "./data/LocalData";
 import { isBrowserStorageStateNewer } from "./data/tabSync";
+import { getSaveLinkData, resolveSaveLink } from "./data/savedScenes";
 import { ShareDialog, shareDialogStateAtom } from "./share/ShareDialog";
 import CollabError, { collabErrorIndicatorAtom } from "./collab/CollabError";
 import { useHandleAppTheme } from "./useHandleAppTheme";
@@ -449,6 +451,54 @@ const ExcalidrawWrapper = () => {
     // TODO maybe remove this in several months (shipped: 24-03-11)
     migrationAdapter: LibraryLocalStorageMigrationAdapter,
   });
+
+  // "Save my work" — reopening a saved-scene magic link. Deliberately its
+  // own effect, independent of initializeScene()/the room-join flow: it
+  // keys off a different hash prefix (#saved= vs #room=/#json=) and never
+  // touches Collab/Portal. See ./data/savedScenes.ts for what's real vs.
+  // mocked in this feature.
+  useEffect(() => {
+    if (!excalidrawAPI) {
+      return;
+    }
+    const saveLinkData = getSaveLinkData(window.location.href);
+    if (!saveLinkData) {
+      return;
+    }
+
+    // Clear the hash up front so a refresh doesn't try to re-resolve it,
+    // and a failed resolve doesn't leave a dead link sitting in the URL bar.
+    window.history.replaceState(
+      {},
+      APP_NAME,
+      window.location.origin + window.location.pathname,
+    );
+
+    resolveSaveLink(saveLinkData).then((result) => {
+      if (result.status === "ok") {
+        excalidrawAPI.updateScene({
+          elements: result.elements,
+          appState: result.appState,
+          captureUpdate: CaptureUpdateAction.NEVER,
+        });
+        if (result.files.length) {
+          excalidrawAPI.addFiles(result.files);
+        }
+        excalidrawAPI.setToast({
+          message: "Welcome back — this is your saved board.",
+        });
+      } else if (result.status === "superseded") {
+        excalidrawAPI.setToast({
+          message:
+            "That save link has been replaced by a newer one from the same session.",
+        });
+      } else {
+        excalidrawAPI.setToast({
+          message: "That save link wasn't found — it may be invalid.",
+        });
+      }
+    });
+  }, [excalidrawAPI]);
 
   const [, forceRefresh] = useState(false);
 
@@ -1006,6 +1056,10 @@ const ExcalidrawWrapper = () => {
               )}
 
               {collabError.message && <CollabError collabError={collabError} />}
+              <SaveMyWorkTrigger
+                excalidrawAPI={excalidrawAPI}
+                isCollaborating={isCollaborating}
+              />
               <LiveCollaborationTrigger
                 isCollaborating={isCollaborating}
                 onSelect={() =>
