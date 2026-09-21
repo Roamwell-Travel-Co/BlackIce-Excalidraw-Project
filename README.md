@@ -19,7 +19,7 @@ Each person builds on their own branch and opens a PR into `main` when ready for
 
 Planning, PRDs, decisions, and research for this project live in a
 separate private repo, not in this one:
-**https://github.com/PixelAndFlow/https-github.com-blackIce-excalidraw-project-docs**
+**https://github.com/PixelAndFlow/blackIce-excalidraw-project-docs**
 
 ## Workflow
 
@@ -30,7 +30,7 @@ separate private repo, not in this one:
 
 > Build/CI notifications from this repo now post automatically to
 > `#black-ice-builds` via the GitHub for Slack integration (set up
-> 2026-09-16). See the [docs repo](https://github.com/PixelAndFlow/https-github.com-blackIce-excalidraw-project-docs)'s
+> 2026-09-16). See the [docs repo](https://github.com/PixelAndFlow/blackIce-excalidraw-project-docs)'s
 > `decisions/decisions-log.md` (Decision 001) and
 > `monitoring-observability/alerting.md` for detail.
 
