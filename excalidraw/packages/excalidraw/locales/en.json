@@ -755,6 +755,14 @@
     "messageSuffix": ". If you change your mind later, please look in settings to change it.",
     "dismiss": "Dismiss"
   },
+  "autosave": {
+    "statusBrowserOnly": "Autosaving to disk: Browser only",
+    "statusFolder": "Autosaving to: {{folder}}",
+    "toggle": "Autosave to disk",
+    "choose": "Choose autosave location...",
+    "change": "Change autosave location...",
+    "reset": "Reset autosave location"
+  },
   "keys": {
     "ctrl": "Ctrl",
     "option": "Option",

@@ -26,6 +26,21 @@ export const markStorageDisclosureSeen = () => {
 };
 
 /**
+ * Re-arms the startup disclosure so it shows again next load. Used by
+ * the Phase C "Reset" action (D-F): resetting the mirror folder clears
+ * the handle and re-arms this disclosure, but never deletes existing
+ * mirrored files.
+ */
+export const clearStorageDisclosureSeen = () => {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.STORAGE_DISCLOSURE_SEEN);
+  } catch (error: any) {
+    // Unable to access window.localStorage
+    console.error(error);
+  }
+};
+
+/**
  * Asks the browser to treat this origin's storage as non-evictable
  * under storage pressure. Never throws; safe to call from any browser,
  * including ones without the Storage API.
