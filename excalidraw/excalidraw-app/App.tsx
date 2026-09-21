@@ -131,6 +131,12 @@ import {
   localStorageQuotaExceededAtom,
 } from "./data/LocalData";
 import { isBrowserStorageStateNewer } from "./data/tabSync";
+import { getStoredMirrorDirectoryHandle } from "./data/folderMirror";
+import {
+  FolderMirrorRuntime,
+  mirrorStatusAtom,
+} from "./data/folderMirrorRuntime";
+import { isAutosaveEnabled } from "./data/folderMirrorSettings";
 import { ShareDialog, shareDialogStateAtom } from "./share/ShareDialog";
 import CollabError, { collabErrorIndicatorAtom } from "./collab/CollabError";
 import { useHandleAppTheme } from "./useHandleAppTheme";
@@ -414,6 +420,57 @@ const ExcalidrawWrapper = () => {
   const collabError = useAtomValue(collabErrorIndicatorAtom);
   const userToFollow = useAtomValue(userToFollowAtom);
 
+  // PRD1 Phase D+E: the folder mirror. Independent of LocalData's own
+  // save path (error isolation, 3.7) -- never awaited inline with it,
+  // and not gated by LocalData.isSavePaused() since, per Decision 010,
+  // the mirror writes during collaboration too, unlike the localStorage
+  // save it deliberately doesn't share a pause lock with.
+  const latestMirrorSceneRef = useRef<{
+    elements: readonly OrderedExcalidrawElement[];
+    appState: AppState;
+    files: BinaryFiles;
+  } | null>(null);
+  const mirrorDirectoryHandleRef = useRef<FileSystemDirectoryHandle | null>(
+    null,
+  );
+  const refreshMirrorDirectoryHandle = useCallback(async () => {
+    if (!isAutosaveEnabled()) {
+      mirrorDirectoryHandleRef.current = null;
+      return;
+    }
+    mirrorDirectoryHandleRef.current =
+      (await getStoredMirrorDirectoryHandle()) ?? null;
+  }, []);
+  const [mirrorRuntime] = useState(
+    () =>
+      new FolderMirrorRuntime({
+        getDirectoryHandle: () => mirrorDirectoryHandleRef.current,
+        getSceneSnapshot: () => {
+          // getDirectoryHandle only returns non-null once a scene has
+          // been captured at least once, so this is never read before
+          // latestMirrorSceneRef is populated.
+          return latestMirrorSceneRef.current!;
+        },
+        onStatusChange: (status) => {
+          appJotaiStore.set(mirrorStatusAtom, status);
+        },
+      }),
+  );
+  useEffect(() => {
+    refreshMirrorDirectoryHandle();
+  }, [refreshMirrorDirectoryHandle]);
+  useEffect(() => {
+    mirrorRuntime.setCollaborating(isCollaborating);
+    if (!isCollaborating) {
+      // the moment a collab session ends, mirror the just-finished
+      // scene rather than waiting for the next solo-editing debounce
+      // (§1.2) -- the dirty-check inside flush() is a no-op if nothing
+      // actually changed since the last periodic collab write.
+      mirrorRuntime.flush().catch((error) => console.error(error));
+    }
+  }, [isCollaborating, mirrorRuntime]);
+  useEffect(() => () => mirrorRuntime.dispose(), [mirrorRuntime]);
+
   const viewportStatusFrame = useMemo(
     () =>
       userToFollow
@@ -656,11 +713,15 @@ const ExcalidrawWrapper = () => {
 
     const onUnload = () => {
       LocalData.flushSave();
+      // independently caught inside flush() itself; never let a mirror
+      // failure interfere with the existing unload handling (3.7).
+      mirrorRuntime.flush().catch((error) => console.error(error));
     };
 
     const visibilityChange = (event: FocusEvent | Event) => {
       if (event.type === EVENT.BLUR || document.hidden) {
         LocalData.flushSave();
+        mirrorRuntime.flush().catch((error) => console.error(error));
       }
       if (
         event.type === EVENT.VISIBILITY_CHANGE ||
@@ -686,11 +747,19 @@ const ExcalidrawWrapper = () => {
         false,
       );
     };
-  }, [isCollabDisabled, collabAPI, excalidrawAPI, setLangCode, loadImages]);
+  }, [
+    isCollabDisabled,
+    collabAPI,
+    excalidrawAPI,
+    setLangCode,
+    loadImages,
+    mirrorRuntime,
+  ]);
 
   useEffect(() => {
     const unloadHandler = (event: BeforeUnloadEvent) => {
       LocalData.flushSave();
+      mirrorRuntime.flush().catch((error) => console.error(error));
 
       if (
         excalidrawAPI &&
@@ -711,7 +780,7 @@ const ExcalidrawWrapper = () => {
     return () => {
       window.removeEventListener(EVENT.BEFORE_UNLOAD, unloadHandler);
     };
-  }, [excalidrawAPI]);
+  }, [excalidrawAPI, mirrorRuntime]);
 
   const onChange = (
     elements: readonly OrderedExcalidrawElement[],
@@ -721,6 +790,11 @@ const ExcalidrawWrapper = () => {
     if (collabAPI?.isCollaborating()) {
       collabAPI.syncElements(elements);
     }
+
+    // independent of LocalData's own save path below (error isolation,
+    // 3.7) -- notifyChange only schedules a timer and never throws.
+    latestMirrorSceneRef.current = { elements, appState, files };
+    mirrorRuntime.notifyChange();
 
     // this check is redundant, but since this is a hot path, it's best
     // not to evaludate the nested expression every time
@@ -1034,6 +1108,26 @@ const ExcalidrawWrapper = () => {
           isCollabEnabled={!isCollabDisabled}
           theme={appTheme}
           refresh={() => forceRefresh((prev) => !prev)}
+          onRestoreAutosavedScene={(scene) => {
+            if (!excalidrawAPI) {
+              return;
+            }
+            if (scene.files && Object.keys(scene.files).length) {
+              excalidrawAPI.addFiles(Object.values(scene.files));
+            }
+            excalidrawAPI.updateScene({
+              elements: scene.elements,
+              appState: scene.appState,
+              captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+            });
+          }}
+          onAutosaveStateChanged={() => {
+            mirrorRuntime.resetDirtyState();
+            refreshMirrorDirectoryHandle();
+          }}
+          onRetryAutosave={() => {
+            mirrorRuntime.flush().catch((error) => console.error(error));
+          }}
         />
         <AppWelcomeScreen
           onCollabDialogOpen={onCollabDialogOpen}

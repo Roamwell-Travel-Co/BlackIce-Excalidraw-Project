@@ -761,7 +761,18 @@
     "toggle": "Autosave to disk",
     "choose": "Choose autosave location...",
     "change": "Change autosave location...",
-    "reset": "Reset autosave location"
+    "reset": "Reset autosave location",
+    "pausedPermission": "Autosave paused -- click to resume",
+    "resume": "Resume autosave",
+    "folderNotFound": "Autosave folder no longer available -- choose a new one",
+    "quotaExceeded": "Autosave disk is full",
+    "retrying": "Autosave temporarily unavailable -- retrying",
+    "restoreDialog": {
+      "title": "Found a previous autosave",
+      "message": "Found a previous autosave from {{timestamp}}. Restore it into your current canvas, or keep what's on your canvas now and start fresh here?",
+      "restore": "Restore",
+      "startFresh": "Start fresh here"
+    }
   },
   "keys": {
     "ctrl": "Ctrl",

@@ -11,6 +11,8 @@ import { isDevEnv } from "@excalidraw/common";
 
 import type { Theme } from "@excalidraw/element/types";
 
+import type { RestoredDataState } from "@excalidraw/excalidraw/data/restore";
+
 import { LanguageList } from "../app-language/LanguageList";
 import { isExcalidrawPlusSignedUser } from "../app_constants";
 
@@ -23,6 +25,9 @@ export const AppMainMenu: React.FC<{
   isCollabEnabled: boolean;
   theme: Theme | "system";
   refresh: () => void;
+  onRestoreAutosavedScene: (scene: RestoredDataState) => void;
+  onAutosaveStateChanged?: () => void;
+  onRetryAutosave?: () => void;
 }> = React.memo((props) => {
   const { t } = useI18n();
   return (
@@ -80,7 +85,13 @@ export const AppMainMenu: React.FC<{
       )}
       <MainMenu.Separator />
       <MainMenu.DefaultItems.Preferences
-        additionalItems={<AutosavePreferencesItems />}
+        additionalItems={
+          <AutosavePreferencesItems
+            onRestoreScene={props.onRestoreAutosavedScene}
+            onAutosaveStateChanged={props.onAutosaveStateChanged}
+            onRetryAutosave={props.onRetryAutosave}
+          />
+        }
       />
       <MainMenu.DefaultItems.ToggleTheme allowSystemTheme theme={props.theme} />
       <MainMenu.ItemCustom>

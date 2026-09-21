@@ -1,18 +1,28 @@
+import { MIME_TYPES } from "@excalidraw/common";
+import { loadFromBlob } from "@excalidraw/excalidraw/data/blob";
+
 import { STORAGE_KEYS } from "../app_constants";
 
-import { clearStorageDisclosureSeen } from "./storageDisclosure";
 import {
   chooseMirrorFolder,
   clearStoredMirrorDirectoryHandle,
   getStoredMirrorDirectoryHandle,
 } from "./folderMirror";
+import {
+  getMostRecentSnapshot,
+  readSnapshotContent,
+} from "./folderMirrorHistory";
+import { clearStorageDisclosureSeen } from "./storageDisclosure";
+
+import type { Snapshot } from "./folderMirrorHistory";
 
 /**
- * PRD1 Phase C: the settings semantics behind the Preferences submenu's
- * composite block (status text + Choose/Change/Reset). No scene data is
- * read or written here -- that's Phase D. "Last-saved timestamp" from
- * the review response's §1.4 display requirement isn't shown yet either,
- * since there's nothing to report a timestamp for until Phase D exists.
+ * PRD1 Phase C/D: the settings semantics behind the Preferences
+ * submenu's composite block (status text + Choose/Change/Reset), and
+ * the restore-before-write detection (1.1's third fix): when a folder
+ * is (re-)chosen, check for prior snapshots *before* anything gets
+ * written to it, so the caller can offer to restore rather than
+ * silently starting fresh next to (or over) old backups.
  */
 
 export const isAutosaveEnabled = (): boolean => {
@@ -52,21 +62,51 @@ export const getFolderMirrorStatus = async (): Promise<FolderMirrorStatus> => {
   return { enabled: isAutosaveEnabled(), folderName: handle.name };
 };
 
+export type ChooseMirrorFolderResult = {
+  folderName: string;
+  /** A prior autosave found in the chosen folder, if any -- checked
+   * before anything is written to it (1.1). Neither restoring it nor
+   * starting fresh happens silently; the caller (UI) decides. */
+  priorSnapshot: Snapshot | null;
+};
+
 /**
  * "Choose" (no folder set yet) and "Change" (replacing one already set)
  * are the same underlying action: (re-)invoke the picker and turn
- * autosave on. Returns the new folder's name, or null if the user
- * cancelled the picker or it otherwise failed.
+ * autosave on. Returns null if the user cancelled the picker or it
+ * otherwise failed.
  */
 export const chooseOrChangeMirrorFolder = async (
   picker?: () => Promise<FileSystemDirectoryHandle>,
-): Promise<string | null> => {
+): Promise<ChooseMirrorFolderResult | null> => {
   try {
     const handle = await chooseMirrorFolder(picker);
+    const priorSnapshot = await getMostRecentSnapshot(handle);
     setAutosaveEnabled(true);
-    return handle.name;
+    return { folderName: handle.name, priorSnapshot };
   } catch (error: any) {
     // e.g. AbortError from a cancelled native picker
+    console.error(error);
+    return null;
+  }
+};
+
+/**
+ * Reads and parses the given prior snapshot from the chosen folder,
+ * ready to load into the canvas via `excalidrawAPI.updateScene` +
+ * `addFiles`. Returns null (logged, not thrown) if the snapshot can't
+ * be read or parsed -- restoring is best-effort, never something that
+ * should crash the app.
+ */
+export const restorePriorSnapshot = async (
+  dir: FileSystemDirectoryHandle,
+  snapshot: Snapshot,
+): Promise<Awaited<ReturnType<typeof loadFromBlob>> | null> => {
+  try {
+    const content = await readSnapshotContent(dir, snapshot.name);
+    const blob = new Blob([content], { type: MIME_TYPES.excalidraw });
+    return await loadFromBlob(blob, null, null);
+  } catch (error: any) {
     console.error(error);
     return null;
   }

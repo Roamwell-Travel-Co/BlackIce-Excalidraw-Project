@@ -31,7 +31,9 @@ describe("AutosavePreferencesItems (smoke)", () => {
   });
 
   it("renders nothing when the browser has no directory picker", async () => {
-    const { container } = renderInMenu(<AutosavePreferencesItems />);
+    const { container } = renderInMenu(
+      <AutosavePreferencesItems onRestoreScene={vi.fn()} />,
+    );
 
     // give the status-loading effect a tick to settle -- it should still
     // render nothing, since the capability check short-circuits first.
@@ -42,7 +44,7 @@ describe("AutosavePreferencesItems (smoke)", () => {
     // @ts-ignore -- simulating a supporting browser
     window.showDirectoryPicker = vi.fn();
 
-    renderInMenu(<AutosavePreferencesItems />);
+    renderInMenu(<AutosavePreferencesItems onRestoreScene={vi.fn()} />);
 
     expect(
       await screen.findByText(/Autosaving to disk: Browser only/),

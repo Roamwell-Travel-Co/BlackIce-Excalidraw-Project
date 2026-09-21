@@ -36,17 +36,39 @@ describe("folder mirror settings (Phase C)", () => {
   });
 
   describe("chooseOrChangeMirrorFolder", () => {
-    it("picks a folder and turns autosave on", async () => {
+    it("picks a folder and turns autosave on, reporting no prior snapshot", async () => {
       const root = asDirectoryHandle(new FakeDirectoryHandle("Documents"));
       const picker = vi.fn().mockResolvedValue(root);
 
-      const folderName = await chooseOrChangeMirrorFolder(picker);
+      const result = await chooseOrChangeMirrorFolder(picker);
 
-      expect(folderName).toBe("BlackIce Backups");
+      expect(result).toEqual({
+        folderName: "BlackIce Backups",
+        priorSnapshot: null,
+      });
       expect(isAutosaveEnabled()).toBe(true);
       expect(await getFolderMirrorStatus()).toEqual({
         enabled: true,
         folderName: "BlackIce Backups",
+      });
+    });
+
+    it("reports a prior snapshot already in the chosen folder, per the restore-before-write flow (1.1)", async () => {
+      const root = new FakeDirectoryHandle("Documents");
+      const appFolder = await asDirectoryHandle(root).getDirectoryHandle(
+        "BlackIce Backups",
+        { create: true },
+      );
+      await appFolder.getFileHandle("blackice-backup-500.excalidraw", {
+        create: true,
+      });
+      const picker = vi.fn().mockResolvedValue(asDirectoryHandle(root));
+
+      const result = await chooseOrChangeMirrorFolder(picker);
+
+      expect(result?.priorSnapshot).toEqual({
+        name: "blackice-backup-500.excalidraw",
+        timestamp: 500,
       });
     });
 
@@ -55,9 +77,9 @@ describe("folder mirror settings (Phase C)", () => {
         .fn()
         .mockRejectedValue(new DOMException("cancelled", "AbortError"));
 
-      const folderName = await chooseOrChangeMirrorFolder(picker);
+      const result = await chooseOrChangeMirrorFolder(picker);
 
-      expect(folderName).toBeNull();
+      expect(result).toBeNull();
       expect(isAutosaveEnabled()).toBe(false);
     });
   });
