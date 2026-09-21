@@ -106,6 +106,7 @@ import {
   ExportToExcalidrawPlus,
   exportToExcalidrawPlus,
 } from "./components/ExportToExcalidrawPlus";
+import { StorageDisclosureBanner } from "./components/StorageDisclosureBanner";
 import { TopErrorBoundary } from "./components/TopErrorBoundary";
 
 import {
@@ -1072,6 +1073,7 @@ const ExcalidrawWrapper = () => {
             {t("alerts.localStorageQuotaExceeded")}
           </div>
         )}
+        <StorageDisclosureBanner />
         {latestShareableLink && (
           <ShareableLinkDialog
             link={latestShareableLink}

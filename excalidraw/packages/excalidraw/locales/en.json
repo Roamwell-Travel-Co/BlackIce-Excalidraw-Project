@@ -749,6 +749,12 @@
     "itemNotAvailable": "Command is not available...",
     "shortcutHint": "For Command palette, use {{shortcut}}"
   },
+  "storageDisclosure": {
+    "messagePrefix": "Your data integrity is important to us. Excalidraw saves your data within the browser cache. If you would also like to automatically save Excalidraw's data elsewhere on your machine,",
+    "clickHere": "click here",
+    "messageSuffix": ". If you change your mind later, please look in settings to change it.",
+    "dismiss": "Dismiss"
+  },
   "keys": {
     "ctrl": "Ctrl",
     "option": "Option",
