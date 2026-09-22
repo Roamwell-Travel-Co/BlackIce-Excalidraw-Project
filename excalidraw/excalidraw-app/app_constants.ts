@@ -40,12 +40,14 @@ export const STORAGE_KEYS = {
   LOCAL_STORAGE_ELEMENTS: "excalidraw",
   LOCAL_STORAGE_APP_STATE: "excalidraw-state",
   LOCAL_STORAGE_COLLAB: "excalidraw-collab",
-  STORAGE_DISCLOSURE_SEEN: "excalidraw-storage-disclosure-seen",
-  AUTOSAVE_ENABLED: "excalidraw-autosave-enabled",
   LOCAL_STORAGE_THEME: "excalidraw-theme",
   LOCAL_STORAGE_DEBUG: "excalidraw-debug",
   VERSION_DATA_STATE: "version-dataState",
   VERSION_FILES: "version-files",
+
+  // PRD1 (autosave-elsewhere / folder mirror)
+  STORAGE_DISCLOSURE_SEEN: "excalidraw-storage-disclosure-seen",
+  AUTOSAVE_ENABLED: "excalidraw-autosave-enabled",
   MIRROR_STATE_VERSION: "excalidraw-mirror-state-version",
 
   IDB_LIBRARY: "excalidraw-library",

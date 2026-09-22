@@ -118,6 +118,12 @@ import {
 
 import { updateStaleImageStatuses } from "./data/FileManager";
 import { FileStatusStore } from "./data/fileStatusStore";
+import { getStoredMirrorDirectoryHandle } from "./data/folderMirror";
+import {
+  FolderMirrorRuntime,
+  mirrorStatusAtom,
+} from "./data/folderMirrorRuntime";
+import { isAutosaveEnabled } from "./data/folderMirrorSettings";
 import {
   importFromLocalStorage,
   importUsernameFromLocalStorage,
@@ -131,12 +137,6 @@ import {
   localStorageQuotaExceededAtom,
 } from "./data/LocalData";
 import { isBrowserStorageStateNewer } from "./data/tabSync";
-import { getStoredMirrorDirectoryHandle } from "./data/folderMirror";
-import {
-  FolderMirrorRuntime,
-  mirrorStatusAtom,
-} from "./data/folderMirrorRuntime";
-import { isAutosaveEnabled } from "./data/folderMirrorSettings";
 import { ShareDialog, shareDialogStateAtom } from "./share/ShareDialog";
 import CollabError, { collabErrorIndicatorAtom } from "./collab/CollabError";
 import { useHandleAppTheme } from "./useHandleAppTheme";
@@ -748,12 +748,12 @@ const ExcalidrawWrapper = () => {
       );
     };
   }, [
+    mirrorRuntime,
     isCollabDisabled,
     collabAPI,
     excalidrawAPI,
     setLangCode,
     loadImages,
-    mirrorRuntime,
   ]);
 
   useEffect(() => {
