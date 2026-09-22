@@ -1,3 +1,5 @@
+import { trackEvent } from "@excalidraw/excalidraw/analytics";
+
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types";
@@ -136,6 +138,7 @@ export class FolderMirrorRuntime {
     } catch (error) {
       console.error(error);
       const errorKind = classifyMirrorError(error);
+      trackEvent("autosave", "write failed", errorKind);
       this.consecutiveFailures += 1;
 
       if (errorKind === "permission") {

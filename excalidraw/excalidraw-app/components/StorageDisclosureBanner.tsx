@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { trackEvent } from "@excalidraw/excalidraw/analytics";
 import { CloseIcon } from "@excalidraw/excalidraw/components/icons";
 import { IconButton } from "@excalidraw/excalidraw/components/IconButton";
 import { t } from "@excalidraw/excalidraw/i18n";
@@ -18,6 +19,7 @@ export const StorageDisclosureBanner = () => {
   useEffect(() => {
     if (!hasSeenStorageDisclosure()) {
       setVisible(true);
+      trackEvent("autosave", "disclosure shown");
       // Requested at the same moment the disclosure is shown, regardless
       // of whether the user acts on it -- this is the durability
       // improvement PRD1-lite provides on every browser today.
@@ -34,7 +36,13 @@ export const StorageDisclosureBanner = () => {
     setVisible(false);
   };
 
+  const handleDismissClick = () => {
+    trackEvent("autosave", "disclosure dismissed");
+    dismiss();
+  };
+
   const handleSaveElsewhereClick = () => {
+    trackEvent("autosave", "disclosure accepted");
     // No folder destination exists yet -- that's the full folder-mirror
     // feature, built in a later phase. Today, this gives the user the
     // one durability improvement that already exists (storage.persist()
@@ -62,7 +70,7 @@ export const StorageDisclosureBanner = () => {
         title={t("storageDisclosure.dismiss")}
         aria-label={t("storageDisclosure.dismiss")}
         className="StorageDisclosureBanner__close"
-        onClick={dismiss}
+        onClick={handleDismissClick}
       />
     </div>
   );

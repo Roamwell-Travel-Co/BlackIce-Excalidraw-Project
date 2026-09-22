@@ -32,6 +32,9 @@ vi.mock("../data/folderMirrorWrite", async (importOriginal) => {
   return { ...actual, mirrorWriteScene };
 });
 
+const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
+vi.mock("@excalidraw/excalidraw/analytics", () => ({ trackEvent }));
+
 const testAppState = (): AppState =>
   ({
     ...getDefaultAppState(),
@@ -50,6 +53,7 @@ describe("folder mirror runtime (Phase D+E orchestration)", () => {
     isAnotherTabAheadOfMirror.mockReset().mockReturnValue(false);
     claimMirrorVersion.mockReset();
     mirrorWriteScene.mockReset().mockResolvedValue("written");
+    trackEvent.mockReset();
   });
 
   afterEach(() => {
@@ -175,6 +179,11 @@ describe("folder mirror runtime (Phase D+E orchestration)", () => {
       await runtime.flush();
 
       expect(statuses.at(-1)).toEqual({ kind: "not-found" });
+      expect(trackEvent).toHaveBeenCalledWith(
+        "autosave",
+        "write failed",
+        "not-found",
+      );
     });
 
     it("QuotaExceededError -> quota-exceeded", async () => {

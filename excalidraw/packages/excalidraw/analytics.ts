@@ -7,6 +7,7 @@ const ALLOWED_CATEGORIES_TO_TRACK = new Set([
   "command_palette",
   "export",
   "ai",
+  "autosave",
 ]);
 
 export const trackEvent = (

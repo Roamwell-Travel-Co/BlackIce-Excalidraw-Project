@@ -7,9 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEYS } from "../app_constants";
 import { StorageDisclosureBanner } from "../components/StorageDisclosureBanner";
 
+const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
+vi.mock("@excalidraw/excalidraw/analytics", () => ({ trackEvent }));
+
 describe("StorageDisclosureBanner", () => {
   beforeEach(() => {
     localStorage.clear();
+    trackEvent.mockReset();
   });
 
   afterEach(() => {
@@ -30,6 +34,7 @@ describe("StorageDisclosureBanner", () => {
       screen.getByText(/Excalidraw saves your data within the browser cache/),
     ).toBeTruthy();
     expect(persist).toHaveBeenCalledTimes(1);
+    expect(trackEvent).toHaveBeenCalledWith("autosave", "disclosure shown");
   });
 
   it("does not render again once the disclosure has been seen", async () => {
@@ -49,6 +54,7 @@ describe("StorageDisclosureBanner", () => {
     expect(localStorage.getItem(STORAGE_KEYS.STORAGE_DISCLOSURE_SEEN)).toBe(
       "1",
     );
+    expect(trackEvent).toHaveBeenCalledWith("autosave", "disclosure dismissed");
   });
 
   it("clicking through the save-elsewhere link also dismisses the banner", async () => {
@@ -60,5 +66,6 @@ describe("StorageDisclosureBanner", () => {
     expect(localStorage.getItem(STORAGE_KEYS.STORAGE_DISCLOSURE_SEEN)).toBe(
       "1",
     );
+    expect(trackEvent).toHaveBeenCalledWith("autosave", "disclosure accepted");
   });
 });

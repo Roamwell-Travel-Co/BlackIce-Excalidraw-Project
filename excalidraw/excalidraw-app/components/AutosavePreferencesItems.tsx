@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { trackEvent } from "@excalidraw/excalidraw/analytics";
 import DropdownMenuItem from "@excalidraw/excalidraw/components/dropdownMenu/DropdownMenuItem";
 import DropdownMenuItemCheckbox from "@excalidraw/excalidraw/components/dropdownMenu/DropdownMenuItemCheckbox";
 import DropdownMenuItemCustom from "@excalidraw/excalidraw/components/dropdownMenu/DropdownMenuItemCustom";
@@ -88,6 +89,7 @@ export const AutosavePreferencesItems = ({
   }
 
   const afterFolderChosen = (priorSnapshot: Snapshot | null) => {
+    trackEvent("autosave", "location chosen");
     onAutosaveStateChanged?.();
     refresh();
     if (priorSnapshot) {
@@ -99,12 +101,14 @@ export const AutosavePreferencesItems = ({
     event.preventDefault();
     if (status.enabled) {
       pauseAutosave();
+      trackEvent("autosave", "toggled", "off");
       onAutosaveStateChanged?.();
       refresh();
       return;
     }
     const resumed = await resumeAutosave();
     if (resumed) {
+      trackEvent("autosave", "toggled", "on");
       onAutosaveStateChanged?.();
       refresh();
       return;
@@ -125,6 +129,7 @@ export const AutosavePreferencesItems = ({
 
   const handleReset = async () => {
     await resetMirrorFolder();
+    trackEvent("autosave", "location reset");
     onAutosaveStateChanged?.();
     refresh();
   };
