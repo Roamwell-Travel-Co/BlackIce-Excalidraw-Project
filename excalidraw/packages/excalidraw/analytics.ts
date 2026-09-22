@@ -8,6 +8,7 @@ const ALLOWED_CATEGORIES_TO_TRACK = new Set([
   "export",
   "ai",
   "autosave",
+  "jump_back_in",
 ]);
 
 export const trackEvent = (

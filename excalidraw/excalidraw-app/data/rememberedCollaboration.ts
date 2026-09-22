@@ -5,7 +5,13 @@ export type RememberedCollaboration = Readonly<{
   roomKey: string;
   createdAt: number;
   lastUsedAt: number;
+  // When the user most recently left this room, or null if they haven't
+  // left it since it was remembered. Decision 012's "successful second
+  // session" requires this in addition to the 24h gap below.
+  leftAt: number | null;
 }>;
+
+const SUCCESSFUL_SECOND_SESSION_MIN_GAP_MS = 24 * 60 * 60 * 1000;
 
 type RememberedCollaborationInput = Pick<
   RememberedCollaboration,
@@ -17,6 +23,11 @@ const ROOM_KEY_PATTERN = /^[a-zA-Z0-9_-]{22}$/;
 
 const isValidTimestamp = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;
+
+// undefined covers records saved before `leftAt` existed; treated as "has
+// not left yet" so a legacy remembered room isn't discarded outright.
+const isValidLeftAt = (value: unknown): value is number | null | undefined =>
+  value === null || value === undefined || isValidTimestamp(value);
 
 const isValidRoomLinkData = (roomId: unknown, roomKey: unknown) =>
   typeof roomId === "string" &&
@@ -36,7 +47,8 @@ const isValidRememberedCollaboration = (
   return (
     isValidRoomLinkData(record.roomId, record.roomKey) &&
     isValidTimestamp(record.createdAt) &&
-    isValidTimestamp(record.lastUsedAt)
+    isValidTimestamp(record.lastUsedAt) &&
+    isValidLeftAt(record.leftAt)
   );
 };
 
@@ -88,7 +100,7 @@ export const getRememberedCollaboration =
     try {
       const record = JSON.parse(storedRecord);
       if (isValidRememberedCollaboration(record)) {
-        return record;
+        return { ...record, leftAt: record.leftAt ?? null };
       }
     } catch (error: any) {
       console.error(error);
@@ -115,6 +127,7 @@ export const rememberCollaboration = (
     roomKey,
     createdAt: now,
     lastUsedAt: now,
+    leftAt: null,
   };
 
   return saveRememberedCollaboration(record);
@@ -143,6 +156,44 @@ export const markRememberedCollaborationUsed = (
   return saveRememberedCollaboration(updatedRecord);
 };
 
+/**
+ * Marks that the user left the remembered room. Part of Decision 012's
+ * "successful second session" definition, alongside the 24h gap.
+ */
+export const markRememberedCollaborationLeft = (
+  now = Date.now(),
+): RememberedCollaboration | null => {
+  if (!isValidTimestamp(now)) {
+    return null;
+  }
+
+  const record = getRememberedCollaboration();
+  if (!record) {
+    return null;
+  }
+
+  const updatedRecord: RememberedCollaboration = {
+    ...record,
+    leftAt: now,
+  };
+
+  return saveRememberedCollaboration(updatedRecord);
+};
+
 export const forgetRememberedCollaboration = () => {
   removeRememberedCollaboration();
 };
+
+/**
+ * Decision 012: a return to the remembered room only counts as a
+ * successful second session if it happens more than 24h after the room
+ * was created AND the user left the room at some point before returning.
+ * Another collaborator's presence at return time is explicitly not part
+ * of this definition.
+ */
+export const isSuccessfulSecondSession = (
+  record: RememberedCollaboration,
+  now = Date.now(),
+): boolean =>
+  record.leftAt !== null &&
+  now - record.createdAt > SUCCESSFUL_SECOND_SESSION_MIN_GAP_MS;

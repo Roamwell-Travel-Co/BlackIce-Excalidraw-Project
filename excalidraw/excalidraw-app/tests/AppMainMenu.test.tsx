@@ -14,6 +14,7 @@ const rememberedCollaboration = {
   roomKey: "key-1",
   createdAt: 100,
   lastUsedAt: 100,
+  leftAt: null,
 };
 
 const renderMenu = async (

@@ -133,6 +133,8 @@ import {
 import {
   getRememberedCollaboration,
   forgetRememberedCollaboration,
+  isSuccessfulSecondSession,
+  markRememberedCollaborationLeft,
   markRememberedCollaborationUsed,
   rememberCollaboration,
 } from "./data/rememberedCollaboration";
@@ -584,6 +586,86 @@ const ExcalidrawWrapper = () => {
         );
       })(),
   );
+
+  // Decision 012 gap: createdAt/lastUsedAt alone can't say whether the
+  // user ever left the remembered room, which the "successful second
+  // session" definition requires. Snapshot the room while collaborating
+  // -- by the time isCollaborating flips false on a hashchange-away,
+  // location.href already points elsewhere, so we can't re-derive it then.
+  const activeCollabRoomRef = useRef<ReturnType<
+    typeof getCollaborationLinkData
+  > | null>(null);
+  // Decision 013: the KPI numerator (D-H, extending the existing
+  // trackEvent plumbing) -- fired once per arrival into the remembered
+  // room, keyed on room signature so re-renders mid-session (e.g. the
+  // leave-marking below updating rememberedCollaboration) can't re-fire it.
+  const secondSessionCheckedRoomRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isCollaborating) {
+      const roomLinkData = getCollaborationLinkData(window.location.href);
+      activeCollabRoomRef.current = roomLinkData;
+
+      if (
+        roomLinkData &&
+        rememberedCollaboration &&
+        getCollaborationSignature(rememberedCollaboration) ===
+          getCollaborationSignature(roomLinkData)
+      ) {
+        const signature = getCollaborationSignature(roomLinkData);
+        if (secondSessionCheckedRoomRef.current !== signature) {
+          secondSessionCheckedRoomRef.current = signature;
+          if (isSuccessfulSecondSession(rememberedCollaboration)) {
+            trackEvent("jump_back_in", "successful_second_session");
+          }
+        }
+      }
+      return;
+    }
+
+    secondSessionCheckedRoomRef.current = null;
+    const leftRoomLinkData = activeCollabRoomRef.current;
+    activeCollabRoomRef.current = null;
+
+    if (
+      !leftRoomLinkData ||
+      !rememberedCollaboration ||
+      getCollaborationSignature(rememberedCollaboration) !==
+        getCollaborationSignature(leftRoomLinkData)
+    ) {
+      return;
+    }
+
+    const updatedRecord = markRememberedCollaborationLeft();
+    if (updatedRecord) {
+      setRememberedCollaboration(updatedRecord);
+    }
+  }, [isCollaborating, rememberedCollaboration]);
+
+  // Same tracking, for the case an in-session effect can't catch: the tab
+  // closing/refreshing while still connected. Own listeners on just
+  // BEFORE_UNLOAD/UNLOAD (not BLUR/VISIBILITY_CHANGE, unlike the mirror's
+  // hide/unload flush below) -- switching tabs isn't leaving the room.
+  useEffect(() => {
+    const markLeftOnUnload = () => {
+      if (!collabAPI?.isCollaborating() || !rememberedCollaboration) {
+        return;
+      }
+      const roomLinkData = getCollaborationLinkData(window.location.href);
+      if (
+        roomLinkData &&
+        getCollaborationSignature(rememberedCollaboration) ===
+          getCollaborationSignature(roomLinkData)
+      ) {
+        markRememberedCollaborationLeft();
+      }
+    };
+    window.addEventListener(EVENT.BEFORE_UNLOAD, markLeftOnUnload);
+    window.addEventListener(EVENT.UNLOAD, markLeftOnUnload);
+    return () => {
+      window.removeEventListener(EVENT.BEFORE_UNLOAD, markLeftOnUnload);
+      window.removeEventListener(EVENT.UNLOAD, markLeftOnUnload);
+    };
+  }, [collabAPI, rememberedCollaboration]);
 
   // PRD1 Phase D+E: the folder mirror. Independent of LocalData's own
   // save path (error isolation, 3.7) -- never awaited inline with it,

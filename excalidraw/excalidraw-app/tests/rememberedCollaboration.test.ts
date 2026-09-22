@@ -4,6 +4,8 @@ import { STORAGE_KEYS } from "../app_constants";
 import {
   forgetRememberedCollaboration,
   getRememberedCollaboration,
+  isSuccessfulSecondSession,
+  markRememberedCollaborationLeft,
   markRememberedCollaborationUsed,
   rememberCollaboration,
 } from "../data/rememberedCollaboration";
@@ -25,6 +27,7 @@ describe("remembered collaboration storage", () => {
       roomKey: roomKey1,
       createdAt: 100,
       lastUsedAt: 100,
+      leftAt: null,
     });
 
     expect(getRememberedCollaboration()).toEqual({
@@ -32,6 +35,7 @@ describe("remembered collaboration storage", () => {
       roomKey: roomKey1,
       createdAt: 100,
       lastUsedAt: 100,
+      leftAt: null,
     });
   });
 
@@ -44,6 +48,7 @@ describe("remembered collaboration storage", () => {
       roomKey: roomKey2,
       createdAt: 200,
       lastUsedAt: 200,
+      leftAt: null,
     });
   });
 
@@ -55,6 +60,76 @@ describe("remembered collaboration storage", () => {
       roomKey: roomKey1,
       createdAt: 100,
       lastUsedAt: 200,
+      leftAt: null,
+    });
+  });
+
+  it("marks when the user left the room, independent of last-used", () => {
+    rememberCollaboration({ roomId: "room-1", roomKey: roomKey1 }, 100);
+
+    expect(markRememberedCollaborationLeft(150)).toEqual({
+      roomId: "room-1",
+      roomKey: roomKey1,
+      createdAt: 100,
+      lastUsedAt: 100,
+      leftAt: 150,
+    });
+  });
+
+  it("returns null from markRememberedCollaborationLeft when nothing is remembered", () => {
+    expect(markRememberedCollaborationLeft(150)).toBeNull();
+  });
+
+  it("treats a legacy record with no leftAt field as not having left", () => {
+    localStorage.setItem(
+      STORAGE_KEYS.RECENT_COLLABORATION,
+      JSON.stringify({
+        roomId: "room-1",
+        roomKey: roomKey1,
+        createdAt: 100,
+        lastUsedAt: 100,
+      }),
+    );
+
+    expect(getRememberedCollaboration()).toEqual({
+      roomId: "room-1",
+      roomKey: roomKey1,
+      createdAt: 100,
+      lastUsedAt: 100,
+      leftAt: null,
+    });
+  });
+
+  describe("isSuccessfulSecondSession (Decision 012)", () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    it("is false before 24h have passed, even if the user left", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+      const left = { ...record, leftAt: 100 };
+
+      expect(isSuccessfulSecondSession(left, DAY_MS - 1)).toBe(false);
+    });
+
+    it("is false after 24h if the user never left", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+
+      expect(isSuccessfulSecondSession(record, DAY_MS + 1)).toBe(false);
+    });
+
+    it("is true after 24h once the user has left", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+      const left = { ...record, leftAt: 100 };
+
+      expect(isSuccessfulSecondSession(left, DAY_MS + 1)).toBe(true);
     });
   });
 
