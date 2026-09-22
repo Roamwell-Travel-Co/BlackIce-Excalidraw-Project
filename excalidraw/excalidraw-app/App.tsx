@@ -471,6 +471,36 @@ const ExcalidrawWrapper = () => {
   }, [isCollaborating, mirrorRuntime]);
   useEffect(() => () => mirrorRuntime.dispose(), [mirrorRuntime]);
 
+  // Flush on hide/unload, mirroring what LocalData.flushSave() already
+  // does at these same moments -- kept as its own independent effect
+  // (own listeners, own deps array) rather than folded into the
+  // existing hashchange/visibility or beforeunload effects below, so
+  // this never has to touch those shared effects' bodies or dependency
+  // arrays (error isolation, 3.7).
+  useEffect(() => {
+    const flush = () => {
+      mirrorRuntime.flush().catch((error) => console.error(error));
+    };
+    // On BLUR, always flush (matches LocalData.flushSave()'s own
+    // BLUR-always-flushes rule); on VISIBILITY_CHANGE, only when the
+    // tab is actually the one becoming hidden, not on every toggle.
+    const onVisibilityOrBlur = (event: FocusEvent | Event) => {
+      if (event.type === EVENT.BLUR || document.hidden) {
+        flush();
+      }
+    };
+    window.addEventListener(EVENT.BEFORE_UNLOAD, flush);
+    window.addEventListener(EVENT.UNLOAD, flush);
+    window.addEventListener(EVENT.BLUR, onVisibilityOrBlur);
+    document.addEventListener(EVENT.VISIBILITY_CHANGE, onVisibilityOrBlur);
+    return () => {
+      window.removeEventListener(EVENT.BEFORE_UNLOAD, flush);
+      window.removeEventListener(EVENT.UNLOAD, flush);
+      window.removeEventListener(EVENT.BLUR, onVisibilityOrBlur);
+      document.removeEventListener(EVENT.VISIBILITY_CHANGE, onVisibilityOrBlur);
+    };
+  }, [mirrorRuntime]);
+
   const viewportStatusFrame = useMemo(
     () =>
       userToFollow
@@ -713,15 +743,11 @@ const ExcalidrawWrapper = () => {
 
     const onUnload = () => {
       LocalData.flushSave();
-      // independently caught inside flush() itself; never let a mirror
-      // failure interfere with the existing unload handling (3.7).
-      mirrorRuntime.flush().catch((error) => console.error(error));
     };
 
     const visibilityChange = (event: FocusEvent | Event) => {
       if (event.type === EVENT.BLUR || document.hidden) {
         LocalData.flushSave();
-        mirrorRuntime.flush().catch((error) => console.error(error));
       }
       if (
         event.type === EVENT.VISIBILITY_CHANGE ||
@@ -747,19 +773,11 @@ const ExcalidrawWrapper = () => {
         false,
       );
     };
-  }, [
-    mirrorRuntime,
-    isCollabDisabled,
-    collabAPI,
-    excalidrawAPI,
-    setLangCode,
-    loadImages,
-  ]);
+  }, [isCollabDisabled, collabAPI, excalidrawAPI, setLangCode, loadImages]);
 
   useEffect(() => {
     const unloadHandler = (event: BeforeUnloadEvent) => {
       LocalData.flushSave();
-      mirrorRuntime.flush().catch((error) => console.error(error));
 
       if (
         excalidrawAPI &&
@@ -780,7 +798,7 @@ const ExcalidrawWrapper = () => {
     return () => {
       window.removeEventListener(EVENT.BEFORE_UNLOAD, unloadHandler);
     };
-  }, [excalidrawAPI, mirrorRuntime]);
+  }, [excalidrawAPI]);
 
   const onChange = (
     elements: readonly OrderedExcalidrawElement[],
