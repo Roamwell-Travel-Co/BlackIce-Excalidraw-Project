@@ -5,16 +5,32 @@ import { CloseIcon } from "@excalidraw/excalidraw/components/icons";
 import { IconButton } from "@excalidraw/excalidraw/components/IconButton";
 import { t } from "@excalidraw/excalidraw/i18n";
 
+import type { RestoredDataState } from "@excalidraw/excalidraw/data/restore";
+
 import {
   hasSeenStorageDisclosure,
   markStorageDisclosureSeen,
   requestPersistentStorage,
 } from "../data/storageDisclosure";
+import { useMirrorFolderChooser } from "../useMirrorFolderChooser";
+
+import { RestoreSnapshotDialog } from "./RestoreSnapshotDialog";
 
 import "./StorageDisclosureBanner.scss";
 
-export const StorageDisclosureBanner = () => {
+export const StorageDisclosureBanner = ({
+  onRestoreScene,
+  onAutosaveStateChanged,
+}: {
+  /** Loads a restored prior snapshot into the live canvas. */
+  onRestoreScene: (scene: RestoredDataState) => void;
+  /** Called after a folder is chosen via "click here", so the mirror
+   * runtime picks up the newly-chosen folder immediately. */
+  onAutosaveStateChanged?: () => void;
+}) => {
   const [visible, setVisible] = useState(false);
+  const { chooseFolder, pendingRestore, handleRestore, handleStartFresh } =
+    useMirrorFolderChooser(onRestoreScene, onAutosaveStateChanged);
 
   useEffect(() => {
     if (!hasSeenStorageDisclosure()) {
@@ -41,14 +57,17 @@ export const StorageDisclosureBanner = () => {
     dismiss();
   };
 
-  const handleSaveElsewhereClick = () => {
+  const handleSaveElsewhereClick = async () => {
     trackEvent("autosave", "disclosure accepted");
-    // No folder destination exists yet -- that's the full folder-mirror
-    // feature, built in a later phase. Today, this gives the user the
-    // one durability improvement that already exists (storage.persist()
-    // was already requested above; re-requesting here is harmless).
-    requestPersistentStorage();
-    dismiss();
+    // Same folder picker as Preferences -> "Choose autosave
+    // location..." (via the shared useMirrorFolderChooser hook) --
+    // this used to just call requestPersistentStorage() and dismiss, a
+    // Phase A placeholder from before the real picker existed. If the
+    // user cancels the native picker, leave the banner up rather than
+    // dismissing as though they'd chosen "browser only".
+    if (await chooseFolder()) {
+      dismiss();
+    }
   };
 
   return (
@@ -72,6 +91,19 @@ export const StorageDisclosureBanner = () => {
         className="StorageDisclosureBanner__close"
         onClick={handleDismissClick}
       />
+      {pendingRestore && (
+        <RestoreSnapshotDialog
+          snapshot={pendingRestore}
+          onRestore={async () => {
+            await handleRestore();
+            dismiss();
+          }}
+          onStartFresh={() => {
+            handleStartFresh();
+            dismiss();
+          }}
+        />
+      )}
     </div>
   );
 };

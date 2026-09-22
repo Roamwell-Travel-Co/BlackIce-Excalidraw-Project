@@ -501,6 +501,30 @@ const ExcalidrawWrapper = () => {
     };
   }, [mirrorRuntime]);
 
+  // Shared by both places a restored snapshot can be loaded: the
+  // Preferences composite block and the startup disclosure banner's
+  // "click here" (see useMirrorFolderChooser.ts).
+  const loadRestoredMirrorScene = useCallback(
+    (scene: RestoredDataState) => {
+      if (!excalidrawAPI) {
+        return;
+      }
+      if (scene.files && Object.keys(scene.files).length) {
+        excalidrawAPI.addFiles(Object.values(scene.files));
+      }
+      excalidrawAPI.updateScene({
+        elements: scene.elements,
+        appState: scene.appState,
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+    },
+    [excalidrawAPI],
+  );
+  const handleMirrorFolderChosen = useCallback(() => {
+    mirrorRuntime.resetDirtyState();
+    refreshMirrorDirectoryHandle();
+  }, [mirrorRuntime, refreshMirrorDirectoryHandle]);
+
   const viewportStatusFrame = useMemo(
     () =>
       userToFollow
@@ -1126,23 +1150,8 @@ const ExcalidrawWrapper = () => {
           isCollabEnabled={!isCollabDisabled}
           theme={appTheme}
           refresh={() => forceRefresh((prev) => !prev)}
-          onRestoreAutosavedScene={(scene) => {
-            if (!excalidrawAPI) {
-              return;
-            }
-            if (scene.files && Object.keys(scene.files).length) {
-              excalidrawAPI.addFiles(Object.values(scene.files));
-            }
-            excalidrawAPI.updateScene({
-              elements: scene.elements,
-              appState: scene.appState,
-              captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-            });
-          }}
-          onAutosaveStateChanged={() => {
-            mirrorRuntime.resetDirtyState();
-            refreshMirrorDirectoryHandle();
-          }}
+          onRestoreAutosavedScene={loadRestoredMirrorScene}
+          onAutosaveStateChanged={handleMirrorFolderChosen}
           onRetryAutosave={() => {
             mirrorRuntime.flush().catch((error) => console.error(error));
           }}
@@ -1185,7 +1194,10 @@ const ExcalidrawWrapper = () => {
             {t("alerts.localStorageQuotaExceeded")}
           </div>
         )}
-        <StorageDisclosureBanner />
+        <StorageDisclosureBanner
+          onRestoreScene={loadRestoredMirrorScene}
+          onAutosaveStateChanged={handleMirrorFolderChosen}
+        />
         {latestShareableLink && (
           <ShareableLinkDialog
             link={latestShareableLink}

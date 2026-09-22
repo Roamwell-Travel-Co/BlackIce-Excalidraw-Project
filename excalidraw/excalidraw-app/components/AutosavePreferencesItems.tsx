@@ -10,23 +10,18 @@ import { t } from "@excalidraw/excalidraw/i18n";
 import type { RestoredDataState } from "@excalidraw/excalidraw/data/restore";
 
 import { useAtomValue } from "../app-jotai";
+import { isFolderMirrorSupported } from "../data/folderMirror";
 import {
-  getStoredMirrorDirectoryHandle,
-  isFolderMirrorSupported,
-} from "../data/folderMirror";
-import {
-  chooseOrChangeMirrorFolder,
   getFolderMirrorStatus,
   pauseAutosave,
-  resetMirrorFolder,
-  restorePriorSnapshot,
   resumeAutosave,
+  resetMirrorFolder,
 } from "../data/folderMirrorSettings";
 import { mirrorStatusAtom } from "../data/folderMirrorRuntime";
+import { useMirrorFolderChooser } from "../useMirrorFolderChooser";
 
 import { RestoreSnapshotDialog } from "./RestoreSnapshotDialog";
 
-import type { Snapshot } from "../data/folderMirrorHistory";
 import type { FolderMirrorStatus } from "../data/folderMirrorSettings";
 import type { MirrorStatus } from "../data/folderMirrorRuntime";
 
@@ -73,8 +68,9 @@ export const AutosavePreferencesItems = ({
   onRetryAutosave?: () => void;
 }) => {
   const [status, setStatus] = useState<FolderMirrorStatus | null>(null);
-  const [pendingRestore, setPendingRestore] = useState<Snapshot | null>(null);
   const mirrorStatus = useAtomValue(mirrorStatusAtom);
+  const { chooseFolder, pendingRestore, handleRestore, handleStartFresh } =
+    useMirrorFolderChooser(onRestoreScene, onAutosaveStateChanged);
 
   const refresh = useCallback(() => {
     getFolderMirrorStatus().then(setStatus);
@@ -87,15 +83,6 @@ export const AutosavePreferencesItems = ({
   if (!isFolderMirrorSupported() || !status) {
     return null;
   }
-
-  const afterFolderChosen = (priorSnapshot: Snapshot | null) => {
-    trackEvent("autosave", "location chosen");
-    onAutosaveStateChanged?.();
-    refresh();
-    if (priorSnapshot) {
-      setPendingRestore(priorSnapshot);
-    }
-  };
 
   const handleToggle = async (event: Event) => {
     event.preventDefault();
@@ -114,16 +101,14 @@ export const AutosavePreferencesItems = ({
       return;
     }
     // No folder has ever been chosen -- there's nothing to resume.
-    const result = await chooseOrChangeMirrorFolder();
-    if (result) {
-      afterFolderChosen(result.priorSnapshot);
+    if (await chooseFolder()) {
+      refresh();
     }
   };
 
   const handleChooseOrChange = async () => {
-    const result = await chooseOrChangeMirrorFolder();
-    if (result) {
-      afterFolderChosen(result.priorSnapshot);
+    if (await chooseFolder()) {
+      refresh();
     }
   };
 
@@ -132,22 +117,6 @@ export const AutosavePreferencesItems = ({
     trackEvent("autosave", "location reset");
     onAutosaveStateChanged?.();
     refresh();
-  };
-
-  const handleRestore = async () => {
-    const snapshot = pendingRestore;
-    setPendingRestore(null);
-    if (!snapshot) {
-      return;
-    }
-    const dir = await getStoredMirrorDirectoryHandle();
-    if (!dir) {
-      return;
-    }
-    const scene = await restorePriorSnapshot(dir, snapshot);
-    if (scene) {
-      onRestoreScene(scene);
-    }
   };
 
   const statusLabel =
@@ -184,7 +153,7 @@ export const AutosavePreferencesItems = ({
         <RestoreSnapshotDialog
           snapshot={pendingRestore}
           onRestore={handleRestore}
-          onStartFresh={() => setPendingRestore(null)}
+          onStartFresh={handleStartFresh}
         />
       )}
     </>
