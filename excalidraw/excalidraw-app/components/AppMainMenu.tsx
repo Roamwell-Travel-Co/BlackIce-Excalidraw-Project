@@ -27,6 +27,7 @@ export const AppMainMenu: React.FC<{
   isCollaborating: boolean;
   isCollabEnabled: boolean;
   rememberedCollaboration: RememberedCollaboration | null;
+  isCurrentCollaborationRemembered: boolean;
   theme: Theme | "system";
   refresh: () => void;
 }> = React.memo((props) => {
@@ -45,14 +46,16 @@ export const AppMainMenu: React.FC<{
       )}
       {props.rememberedCollaboration && (
         <>
-          <MainMenu.Item
-            icon={usersIcon}
-            onSelect={props.onJumpBackIn}
-            aria-label={t("jumpBackIn.jumpBackIn")}
-            style={{ color: "var(--color-primary)" }}
-          >
-            <strong>{t("jumpBackIn.jumpBackIn")}</strong>
-          </MainMenu.Item>
+          {!props.isCurrentCollaborationRemembered && (
+            <MainMenu.Item
+              icon={usersIcon}
+              onSelect={props.onJumpBackIn}
+              aria-label={t("jumpBackIn.jumpBackIn")}
+              style={{ color: "var(--color-primary)" }}
+            >
+              <strong>{t("jumpBackIn.jumpBackIn")}</strong>
+            </MainMenu.Item>
+          )}
           <MainMenu.Item
             icon={TrashIcon}
             onSelect={props.onForgetCollaboration}

@@ -16,7 +16,10 @@ const rememberedCollaboration = {
   lastUsedAt: 100,
 };
 
-const renderMenu = async (hasRememberedCollaboration: boolean) => {
+const renderMenu = async (
+  hasRememberedCollaboration: boolean,
+  isCurrentCollaborationRemembered = false,
+) => {
   const onJumpBackIn = vi.fn();
   const onForgetCollaboration = vi.fn();
 
@@ -32,6 +35,7 @@ const renderMenu = async (hasRememberedCollaboration: boolean) => {
           rememberedCollaboration={
             hasRememberedCollaboration ? rememberedCollaboration : null
           }
+          isCurrentCollaborationRemembered={isCurrentCollaborationRemembered}
           theme="light"
           refresh={vi.fn()}
         />
@@ -61,5 +65,17 @@ describe("AppMainMenu", () => {
 
     expect(screen.queryByText("Jump Back In")).toBeNull();
     expect(screen.queryByText("Delete Jump Back In collaboration")).toBeNull();
+  });
+
+  it("hides Jump Back In when the remembered room is already open", async () => {
+    const { onJumpBackIn, onForgetCollaboration } = await renderMenu(
+      true,
+      true,
+    );
+
+    expect(screen.queryByText("Jump Back In")).toBeNull();
+    fireEvent.click(screen.getByText("Delete Jump Back In collaboration"));
+    expect(onJumpBackIn).not.toHaveBeenCalled();
+    expect(onForgetCollaboration).toHaveBeenCalledOnce();
   });
 });

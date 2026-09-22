@@ -49,6 +49,22 @@ const removeRememberedCollaboration = () => {
   }
 };
 
+const saveRememberedCollaboration = (
+  record: RememberedCollaboration,
+): RememberedCollaboration | null => {
+  try {
+    localStorage.setItem(
+      STORAGE_KEYS.RECENT_COLLABORATION,
+      JSON.stringify(record),
+    );
+    return record;
+  } catch (error: any) {
+    // Unable to access window.localStorage
+    console.error(error);
+    return null;
+  }
+};
+
 /**
  * Returns the single remembered collaboration for this browser, if one exists.
  * Invalid stored data is removed so it cannot affect normal collaboration.
@@ -101,17 +117,7 @@ export const rememberCollaboration = (
     lastUsedAt: now,
   };
 
-  try {
-    localStorage.setItem(
-      STORAGE_KEYS.RECENT_COLLABORATION,
-      JSON.stringify(record),
-    );
-    return record;
-  } catch (error: any) {
-    // Unable to access window.localStorage
-    console.error(error);
-    return null;
-  }
+  return saveRememberedCollaboration(record);
 };
 
 /**
@@ -134,17 +140,7 @@ export const markRememberedCollaborationUsed = (
     lastUsedAt: now,
   };
 
-  try {
-    localStorage.setItem(
-      STORAGE_KEYS.RECENT_COLLABORATION,
-      JSON.stringify(updatedRecord),
-    );
-    return updatedRecord;
-  } catch (error: any) {
-    // Unable to access window.localStorage
-    console.error(error);
-    return null;
-  }
+  return saveRememberedCollaboration(updatedRecord);
 };
 
 export const forgetRememberedCollaboration = () => {

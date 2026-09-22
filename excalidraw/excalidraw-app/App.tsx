@@ -126,6 +126,7 @@ import {
 import {
   getRememberedCollaboration,
   forgetRememberedCollaboration,
+  markRememberedCollaborationUsed,
   rememberCollaboration,
 } from "./data/rememberedCollaboration";
 
@@ -536,23 +537,46 @@ const ExcalidrawWrapper = () => {
       return;
     }
 
+    const updatedRecord = markRememberedCollaborationUsed();
+    if (updatedRecord) {
+      setRememberedCollaboration(updatedRecord);
+    }
     window.location.assign(getCollaborationLink(rememberedCollaboration));
   }, [rememberedCollaboration]);
 
   const forgetCollaboration = useCallback(() => {
     const roomLinkData = getCollaborationLinkData(window.location.href);
-    if (roomLinkData) {
-      suppressedRememberPromptRef.current =
+    const isDeletingCurrentRoom =
+      rememberedCollaboration &&
+      roomLinkData &&
+      getCollaborationSignature(rememberedCollaboration) ===
         getCollaborationSignature(roomLinkData);
-    }
-    if (rememberPromptTimerRef.current !== null) {
-      window.clearTimeout(rememberPromptTimerRef.current);
-      rememberPromptTimerRef.current = null;
+
+    if (isDeletingCurrentRoom) {
+      suppressedRememberPromptRef.current = getCollaborationSignature(
+        rememberedCollaboration,
+      );
+      if (rememberPromptTimerRef.current !== null) {
+        window.clearTimeout(rememberPromptTimerRef.current);
+        rememberPromptTimerRef.current = null;
+      }
+      excalidrawAPI?.setToast(null);
     }
     forgetRememberedCollaboration();
     setRememberedCollaboration(null);
-    excalidrawAPI?.setToast(null);
-  }, [excalidrawAPI]);
+  }, [excalidrawAPI, rememberedCollaboration]);
+
+  const isCurrentCollaborationRemembered = Boolean(
+    rememberedCollaboration &&
+      (() => {
+        const roomLinkData = getCollaborationLinkData(window.location.href);
+        return (
+          roomLinkData &&
+          getCollaborationSignature(rememberedCollaboration) ===
+            getCollaborationSignature(roomLinkData)
+        );
+      })(),
+  );
 
   const viewportStatusFrame = useMemo(
     () =>
@@ -1184,6 +1208,7 @@ const ExcalidrawWrapper = () => {
           isCollaborating={isCollaborating}
           isCollabEnabled={!isCollabDisabled}
           rememberedCollaboration={rememberedCollaboration}
+          isCurrentCollaborationRemembered={isCurrentCollaborationRemembered}
           theme={appTheme}
           refresh={() => forceRefresh((prev) => !prev)}
         />
