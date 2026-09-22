@@ -9,6 +9,10 @@ export type RememberedCollaboration = Readonly<{
   // left it since it was remembered. Decision 012's "successful second
   // session" requires this in addition to the 24h gap below.
   leftAt: number | null;
+  // When the KPI event for this room's *first* qualifying return fired, or
+  // null if it hasn't yet. Without this, every later qualifying return to
+  // the same room would re-fire "successful second session".
+  secondSessionCountedAt: number | null;
 }>;
 
 const SUCCESSFUL_SECOND_SESSION_MIN_GAP_MS = 24 * 60 * 60 * 1000;
@@ -24,9 +28,11 @@ const ROOM_KEY_PATTERN = /^[a-zA-Z0-9_-]{22}$/;
 const isValidTimestamp = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;
 
-// undefined covers records saved before `leftAt` existed; treated as "has
-// not left yet" so a legacy remembered room isn't discarded outright.
-const isValidLeftAt = (value: unknown): value is number | null | undefined =>
+// undefined covers records saved before a nullable field existed; treated
+// as "not set" so a legacy remembered room isn't discarded outright.
+const isValidNullableTimestamp = (
+  value: unknown,
+): value is number | null | undefined =>
   value === null || value === undefined || isValidTimestamp(value);
 
 const isValidRoomLinkData = (roomId: unknown, roomKey: unknown) =>
@@ -48,7 +54,8 @@ const isValidRememberedCollaboration = (
     isValidRoomLinkData(record.roomId, record.roomKey) &&
     isValidTimestamp(record.createdAt) &&
     isValidTimestamp(record.lastUsedAt) &&
-    isValidLeftAt(record.leftAt)
+    isValidNullableTimestamp(record.leftAt) &&
+    isValidNullableTimestamp(record.secondSessionCountedAt)
   );
 };
 
@@ -100,7 +107,11 @@ export const getRememberedCollaboration =
     try {
       const record = JSON.parse(storedRecord);
       if (isValidRememberedCollaboration(record)) {
-        return { ...record, leftAt: record.leftAt ?? null };
+        return {
+          ...record,
+          leftAt: record.leftAt ?? null,
+          secondSessionCountedAt: record.secondSessionCountedAt ?? null,
+        };
       }
     } catch (error: any) {
       console.error(error);
@@ -128,6 +139,7 @@ export const rememberCollaboration = (
     createdAt: now,
     lastUsedAt: now,
     leftAt: null,
+    secondSessionCountedAt: null,
   };
 
   return saveRememberedCollaboration(record);
@@ -180,6 +192,31 @@ export const markRememberedCollaborationLeft = (
   return saveRememberedCollaboration(updatedRecord);
 };
 
+/**
+ * Marks that this room's one-time "successful second session" KPI event
+ * has fired, so a later qualifying return to the same room never re-fires
+ * it -- the KPI is about the first second session, not every session after.
+ */
+export const markSecondSessionCounted = (
+  now = Date.now(),
+): RememberedCollaboration | null => {
+  if (!isValidTimestamp(now)) {
+    return null;
+  }
+
+  const record = getRememberedCollaboration();
+  if (!record) {
+    return null;
+  }
+
+  const updatedRecord: RememberedCollaboration = {
+    ...record,
+    secondSessionCountedAt: now,
+  };
+
+  return saveRememberedCollaboration(updatedRecord);
+};
+
 export const forgetRememberedCollaboration = () => {
   removeRememberedCollaboration();
 };
@@ -197,3 +234,14 @@ export const isSuccessfulSecondSession = (
 ): boolean =>
   record.leftAt !== null &&
   now - record.createdAt > SUCCESSFUL_SECOND_SESSION_MIN_GAP_MS;
+
+/**
+ * Whether this return should fire the KPI event: meets Decision 012's
+ * criteria AND hasn't already been counted for this room.
+ */
+export const shouldCountSecondSession = (
+  record: RememberedCollaboration,
+  now = Date.now(),
+): boolean =>
+  record.secondSessionCountedAt === null &&
+  isSuccessfulSecondSession(record, now);

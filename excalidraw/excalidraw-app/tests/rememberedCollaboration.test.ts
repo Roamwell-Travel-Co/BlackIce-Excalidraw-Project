@@ -7,7 +7,9 @@ import {
   isSuccessfulSecondSession,
   markRememberedCollaborationLeft,
   markRememberedCollaborationUsed,
+  markSecondSessionCounted,
   rememberCollaboration,
+  shouldCountSecondSession,
 } from "../data/rememberedCollaboration";
 
 const roomKey1 = "1234567890123456789012";
@@ -28,6 +30,7 @@ describe("remembered collaboration storage", () => {
       createdAt: 100,
       lastUsedAt: 100,
       leftAt: null,
+      secondSessionCountedAt: null,
     });
 
     expect(getRememberedCollaboration()).toEqual({
@@ -36,6 +39,7 @@ describe("remembered collaboration storage", () => {
       createdAt: 100,
       lastUsedAt: 100,
       leftAt: null,
+      secondSessionCountedAt: null,
     });
   });
 
@@ -49,6 +53,7 @@ describe("remembered collaboration storage", () => {
       createdAt: 200,
       lastUsedAt: 200,
       leftAt: null,
+      secondSessionCountedAt: null,
     });
   });
 
@@ -61,6 +66,7 @@ describe("remembered collaboration storage", () => {
       createdAt: 100,
       lastUsedAt: 200,
       leftAt: null,
+      secondSessionCountedAt: null,
     });
   });
 
@@ -73,6 +79,7 @@ describe("remembered collaboration storage", () => {
       createdAt: 100,
       lastUsedAt: 100,
       leftAt: 150,
+      secondSessionCountedAt: null,
     });
   });
 
@@ -80,7 +87,25 @@ describe("remembered collaboration storage", () => {
     expect(markRememberedCollaborationLeft(150)).toBeNull();
   });
 
-  it("treats a legacy record with no leftAt field as not having left", () => {
+  it("marks the second session counted, independent of leftAt/last-used", () => {
+    rememberCollaboration({ roomId: "room-1", roomKey: roomKey1 }, 100);
+    markRememberedCollaborationLeft(150);
+
+    expect(markSecondSessionCounted(200)).toEqual({
+      roomId: "room-1",
+      roomKey: roomKey1,
+      createdAt: 100,
+      lastUsedAt: 100,
+      leftAt: 150,
+      secondSessionCountedAt: 200,
+    });
+  });
+
+  it("returns null from markSecondSessionCounted when nothing is remembered", () => {
+    expect(markSecondSessionCounted(200)).toBeNull();
+  });
+
+  it("treats a legacy record with no leftAt/secondSessionCountedAt fields as not set", () => {
     localStorage.setItem(
       STORAGE_KEYS.RECENT_COLLABORATION,
       JSON.stringify({
@@ -97,6 +122,7 @@ describe("remembered collaboration storage", () => {
       createdAt: 100,
       lastUsedAt: 100,
       leftAt: null,
+      secondSessionCountedAt: null,
     });
   });
 
@@ -130,6 +156,36 @@ describe("remembered collaboration storage", () => {
       const left = { ...record, leftAt: 100 };
 
       expect(isSuccessfulSecondSession(left, DAY_MS + 1)).toBe(true);
+    });
+  });
+
+  describe("shouldCountSecondSession (fires once per room, not every qualifying return)", () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    it("is true the first time criteria are met", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+      const left = { ...record, leftAt: 100 };
+
+      expect(shouldCountSecondSession(left, DAY_MS + 1)).toBe(true);
+    });
+
+    it("is false once already counted, even on a later qualifying return", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+      const leftAndCounted = {
+        ...record,
+        leftAt: 100,
+        secondSessionCountedAt: DAY_MS + 1,
+      };
+
+      // A third session, well after the first qualifying return -- must
+      // not be double-counted as another "successful second session".
+      expect(shouldCountSecondSession(leftAndCounted, DAY_MS * 10)).toBe(false);
     });
   });
 

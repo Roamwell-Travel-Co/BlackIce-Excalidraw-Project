@@ -133,10 +133,11 @@ import {
 import {
   getRememberedCollaboration,
   forgetRememberedCollaboration,
-  isSuccessfulSecondSession,
   markRememberedCollaborationLeft,
   markRememberedCollaborationUsed,
+  markSecondSessionCounted,
   rememberCollaboration,
+  shouldCountSecondSession,
 } from "./data/rememberedCollaboration";
 
 import { loadFilesFromFirebase } from "./data/firebase";
@@ -614,8 +615,12 @@ const ExcalidrawWrapper = () => {
         const signature = getCollaborationSignature(roomLinkData);
         if (secondSessionCheckedRoomRef.current !== signature) {
           secondSessionCheckedRoomRef.current = signature;
-          if (isSuccessfulSecondSession(rememberedCollaboration)) {
+          if (shouldCountSecondSession(rememberedCollaboration)) {
             trackEvent("jump_back_in", "successful_second_session");
+            const updatedRecord = markSecondSessionCounted();
+            if (updatedRecord) {
+              setRememberedCollaboration(updatedRecord);
+            }
           }
         }
       }
