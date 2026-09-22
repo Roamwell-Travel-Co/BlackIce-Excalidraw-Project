@@ -2,6 +2,8 @@ import {
   loginIcon,
   ExcalLogo,
   eyeIcon,
+  TrashIcon,
+  usersIcon,
 } from "@excalidraw/excalidraw/components/icons";
 import { useI18n } from "@excalidraw/excalidraw/i18n";
 import { MainMenu } from "@excalidraw/excalidraw/index";
@@ -16,10 +18,16 @@ import { isExcalidrawPlusSignedUser } from "../app_constants";
 
 import { saveDebugState } from "./DebugCanvas";
 
+import type { RememberedCollaboration } from "../data/rememberedCollaboration";
+
 export const AppMainMenu: React.FC<{
   onCollabDialogOpen: () => any;
+  onJumpBackIn: () => void;
+  onForgetCollaboration: () => void;
   isCollaborating: boolean;
   isCollabEnabled: boolean;
+  rememberedCollaboration: RememberedCollaboration | null;
+  isCurrentCollaborationRemembered: boolean;
   theme: Theme | "system";
   refresh: () => void;
 }> = React.memo((props) => {
@@ -35,6 +43,28 @@ export const AppMainMenu: React.FC<{
           isCollaborating={props.isCollaborating}
           onSelect={() => props.onCollabDialogOpen()}
         />
+      )}
+      {props.rememberedCollaboration && (
+        <>
+          {!props.isCurrentCollaborationRemembered && (
+            <MainMenu.Item
+              icon={usersIcon}
+              onSelect={props.onJumpBackIn}
+              aria-label={t("jumpBackIn.jumpBackIn")}
+              style={{ color: "var(--color-primary)" }}
+            >
+              <strong>{t("jumpBackIn.jumpBackIn")}</strong>
+            </MainMenu.Item>
+          )}
+          <MainMenu.Item
+            icon={TrashIcon}
+            onSelect={props.onForgetCollaboration}
+            aria-label={t("jumpBackIn.forget")}
+            style={{ color: "var(--color-primary)" }}
+          >
+            {t("jumpBackIn.forget")}
+          </MainMenu.Item>
+        </>
       )}
       <MainMenu.DefaultItems.CommandPalette className="highlighted" />
       <MainMenu.DefaultItems.SearchMenu />
