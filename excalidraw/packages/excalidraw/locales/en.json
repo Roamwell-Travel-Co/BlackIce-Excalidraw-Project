@@ -582,6 +582,14 @@
     "unrecognizedLinkFormat": "The link you embedded does not match the expected format. Please try to paste the 'embed' string provided by the source site",
     "elementLinkCopied": "Link copied to clipboard"
   },
+  "jumpBackIn": {
+    "rememberPrompt": "Remember this collaboration on this browser? Clearing browser data will remove it.",
+    "rememberAction": "Remember",
+    "rememberedConfirmation": "Collaboration remembered on this browser.",
+    "rememberError": "Couldn't remember this collaboration.",
+    "jumpBackIn": "Jump Back In",
+    "forget": "Delete Jump Back In collaboration"
+  },
   "colors": {
     "transparent": "Transparent",
     "black": "Black",

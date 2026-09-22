@@ -15,6 +15,7 @@ import {
   DEFAULT_CATEGORIES,
 } from "@excalidraw/excalidraw/components/CommandPalette/CommandPalette";
 import { ErrorDialog } from "@excalidraw/excalidraw/components/ErrorDialog";
+import { Button } from "@excalidraw/excalidraw/components/Button";
 import { OverwriteConfirmDialog } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirm";
 import { openConfirmModal } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirmState";
 import { ShareableLinkDialog } from "@excalidraw/excalidraw/components/ShareableLinkDialog";
@@ -111,6 +112,7 @@ import { TopErrorBoundary } from "./components/TopErrorBoundary";
 
 import {
   exportToBackend,
+  getCollaborationLink,
   getCollaborationLinkData,
   importFromBackend,
   isCollaborationLink,
@@ -128,6 +130,12 @@ import {
   importFromLocalStorage,
   importUsernameFromLocalStorage,
 } from "./data/localStorage";
+import {
+  getRememberedCollaboration,
+  forgetRememberedCollaboration,
+  markRememberedCollaborationUsed,
+  rememberCollaboration,
+} from "./data/rememberedCollaboration";
 
 import { loadFilesFromFirebase } from "./data/firebase";
 import {
@@ -220,6 +228,14 @@ const shareableLinkConfirmDialog = {
   actionLabel: t("overwriteConfirm.modal.shareableLink.button"),
   color: "danger",
 } as const;
+
+const getCollaborationSignature = ({
+  roomId,
+  roomKey,
+}: {
+  roomId: string;
+  roomKey: string;
+}) => `${roomId}:${roomKey}`;
 
 const initializeScene = async (opts: {
   collabAPI: CollabAPI | null;
@@ -397,6 +413,8 @@ const ExcalidrawWrapper = () => {
   const initialStatePromiseRef = useRef<{
     promise: ResolvablePromise<ExcalidrawInitialDataState | null>;
   }>({ promise: null! });
+  const rememberPromptTimerRef = useRef<number | null>(null);
+  const suppressedRememberPromptRef = useRef<string | null>(null);
   if (!initialStatePromiseRef.current.promise) {
     initialStatePromiseRef.current.promise =
       resolvablePromise<ExcalidrawInitialDataState | null>();
@@ -419,6 +437,153 @@ const ExcalidrawWrapper = () => {
   });
   const collabError = useAtomValue(collabErrorIndicatorAtom);
   const userToFollow = useAtomValue(userToFollowAtom);
+  const [rememberedCollaboration, setRememberedCollaboration] = useState(() =>
+    getRememberedCollaboration(),
+  );
+
+  const offerRememberCollaboration = useCallback(() => {
+    if (!excalidrawAPI) {
+      return;
+    }
+
+    if (rememberPromptTimerRef.current !== null) {
+      window.clearTimeout(rememberPromptTimerRef.current);
+    }
+
+    // Collaboration startup can update the editor state after its promise
+    // resolves. Defer this non-blocking prompt until that work has settled so
+    // the editor doesn't replace it before the guest can act on it.
+    rememberPromptTimerRef.current = window.setTimeout(() => {
+      rememberPromptTimerRef.current = null;
+
+      const roomLinkData = getCollaborationLinkData(window.location.href);
+      if (!roomLinkData) {
+        suppressedRememberPromptRef.current = null;
+        return;
+      }
+
+      if (
+        suppressedRememberPromptRef.current ===
+        getCollaborationSignature(roomLinkData)
+      ) {
+        return;
+      }
+
+      const rememberedCollaboration = getRememberedCollaboration();
+      if (
+        rememberedCollaboration?.roomId === roomLinkData.roomId &&
+        rememberedCollaboration.roomKey === roomLinkData.roomKey
+      ) {
+        return;
+      }
+
+      excalidrawAPI.setToast({
+        message: (
+          <div
+            style={{
+              alignItems: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.5rem",
+            }}
+          >
+            <span>{t("jumpBackIn.rememberPrompt")}</span>
+            <Button
+              aria-label={t("jumpBackIn.rememberAction")}
+              style={{
+                backgroundColor: "transparent",
+                border: "none",
+                color: "var(--text-primary-color)",
+                gap: "0.5rem",
+                height: "auto",
+                padding: "0.25rem 0.5rem",
+                pointerEvents: "auto",
+                width: "auto",
+              }}
+              onSelect={() => {
+                const record = rememberCollaboration(roomLinkData);
+                setRememberedCollaboration(record);
+                excalidrawAPI.setToast({
+                  message: record
+                    ? t("jumpBackIn.rememberedConfirmation")
+                    : t("jumpBackIn.rememberError"),
+                  closable: true,
+                });
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  backgroundColor: "var(--color-primary)",
+                  borderRadius: "0.25rem",
+                  display: "block",
+                  height: "0.875rem",
+                  width: "0.875rem",
+                }}
+              />
+              <span>{t("jumpBackIn.rememberAction")}</span>
+            </Button>
+          </div>
+        ),
+        closable: true,
+        duration: Infinity,
+      });
+    }, 1000);
+  }, [excalidrawAPI]);
+
+  useEffect(() => {
+    return () => {
+      if (rememberPromptTimerRef.current !== null) {
+        window.clearTimeout(rememberPromptTimerRef.current);
+      }
+    };
+  }, []);
+
+  const jumpBackIn = useCallback(() => {
+    if (!rememberedCollaboration) {
+      return;
+    }
+
+    const updatedRecord = markRememberedCollaborationUsed();
+    if (updatedRecord) {
+      setRememberedCollaboration(updatedRecord);
+    }
+    window.location.assign(getCollaborationLink(rememberedCollaboration));
+  }, [rememberedCollaboration]);
+
+  const forgetCollaboration = useCallback(() => {
+    const roomLinkData = getCollaborationLinkData(window.location.href);
+    const isDeletingCurrentRoom =
+      rememberedCollaboration &&
+      roomLinkData &&
+      getCollaborationSignature(rememberedCollaboration) ===
+        getCollaborationSignature(roomLinkData);
+
+    if (isDeletingCurrentRoom) {
+      suppressedRememberPromptRef.current = getCollaborationSignature(
+        rememberedCollaboration,
+      );
+      if (rememberPromptTimerRef.current !== null) {
+        window.clearTimeout(rememberPromptTimerRef.current);
+        rememberPromptTimerRef.current = null;
+      }
+      excalidrawAPI?.setToast(null);
+    }
+    forgetRememberedCollaboration();
+    setRememberedCollaboration(null);
+  }, [excalidrawAPI, rememberedCollaboration]);
+
+  const isCurrentCollaborationRemembered = Boolean(
+    rememberedCollaboration &&
+      (() => {
+        const roomLinkData = getCollaborationLinkData(window.location.href);
+        return (
+          roomLinkData &&
+          getCollaborationSignature(rememberedCollaboration) ===
+            getCollaborationSignature(roomLinkData)
+        );
+      })(),
+  );
 
   // PRD1 Phase D+E: the folder mirror. Independent of LocalData's own
   // save path (error isolation, 3.7) -- never awaited inline with it,
@@ -677,6 +842,7 @@ const ExcalidrawWrapper = () => {
     initializeScene({ collabAPI, excalidrawAPI }).then(async (data) => {
       loadImages(data, /* isInitialLoad */ true);
       initialStatePromiseRef.current.promise.resolve(data.scene);
+      offerRememberCollaboration();
     });
 
     const onHashChange = async (event: HashChangeEvent) => {
@@ -702,6 +868,7 @@ const ExcalidrawWrapper = () => {
               captureUpdate: CaptureUpdateAction.IMMEDIATELY,
             });
           }
+          offerRememberCollaboration();
         });
       }
     };
@@ -797,7 +964,14 @@ const ExcalidrawWrapper = () => {
         false,
       );
     };
-  }, [isCollabDisabled, collabAPI, excalidrawAPI, setLangCode, loadImages]);
+  }, [
+    isCollabDisabled,
+    collabAPI,
+    excalidrawAPI,
+    setLangCode,
+    loadImages,
+    offerRememberCollaboration,
+  ]);
 
   useEffect(() => {
     const unloadHandler = (event: BeforeUnloadEvent) => {
@@ -1146,8 +1320,12 @@ const ExcalidrawWrapper = () => {
       >
         <AppMainMenu
           onCollabDialogOpen={onCollabDialogOpen}
+          onJumpBackIn={jumpBackIn}
+          onForgetCollaboration={forgetCollaboration}
           isCollaborating={isCollaborating}
           isCollabEnabled={!isCollabDisabled}
+          rememberedCollaboration={rememberedCollaboration}
+          isCurrentCollaborationRemembered={isCurrentCollaborationRemembered}
           theme={appTheme}
           refresh={() => forceRefresh((prev) => !prev)}
           onRestoreAutosavedScene={loadRestoredMirrorScene}
