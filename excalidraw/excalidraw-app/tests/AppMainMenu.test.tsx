@@ -38,6 +38,7 @@ const renderMenu = async (
           isCurrentCollaborationRemembered={isCurrentCollaborationRemembered}
           theme="light"
           refresh={vi.fn()}
+          onRestoreAutosavedScene={vi.fn()}
         />
       </Excalidraw>
     </Provider>,
