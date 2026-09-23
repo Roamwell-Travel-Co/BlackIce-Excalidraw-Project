@@ -2,6 +2,8 @@ import {
   loginIcon,
   ExcalLogo,
   eyeIcon,
+  TrashIcon,
+  usersIcon,
 } from "@excalidraw/excalidraw/components/icons";
 import { useI18n } from "@excalidraw/excalidraw/i18n";
 import { MainMenu } from "@excalidraw/excalidraw/index";
@@ -11,17 +13,29 @@ import { isDevEnv } from "@excalidraw/common";
 
 import type { Theme } from "@excalidraw/element/types";
 
+import type { RestoredDataState } from "@excalidraw/excalidraw/data/restore";
+
 import { LanguageList } from "../app-language/LanguageList";
 import { isExcalidrawPlusSignedUser } from "../app_constants";
 
+import { AutosavePreferencesItems } from "./AutosavePreferencesItems";
 import { saveDebugState } from "./DebugCanvas";
+
+import type { RememberedCollaboration } from "../data/rememberedCollaboration";
 
 export const AppMainMenu: React.FC<{
   onCollabDialogOpen: () => any;
+  onJumpBackIn: () => void;
+  onForgetCollaboration: () => void;
   isCollaborating: boolean;
   isCollabEnabled: boolean;
+  rememberedCollaboration: RememberedCollaboration | null;
+  isCurrentCollaborationRemembered: boolean;
   theme: Theme | "system";
   refresh: () => void;
+  onRestoreAutosavedScene: (scene: RestoredDataState) => void;
+  onAutosaveStateChanged?: () => void;
+  onRetryAutosave?: () => void;
 }> = React.memo((props) => {
   const { t } = useI18n();
   return (
@@ -35,6 +49,28 @@ export const AppMainMenu: React.FC<{
           isCollaborating={props.isCollaborating}
           onSelect={() => props.onCollabDialogOpen()}
         />
+      )}
+      {props.rememberedCollaboration && (
+        <>
+          {!props.isCurrentCollaborationRemembered && (
+            <MainMenu.Item
+              icon={usersIcon}
+              onSelect={props.onJumpBackIn}
+              aria-label={t("jumpBackIn.jumpBackIn")}
+              style={{ color: "var(--color-primary)" }}
+            >
+              <strong>{t("jumpBackIn.jumpBackIn")}</strong>
+            </MainMenu.Item>
+          )}
+          <MainMenu.Item
+            icon={TrashIcon}
+            onSelect={props.onForgetCollaboration}
+            aria-label={t("jumpBackIn.forget")}
+            style={{ color: "var(--color-primary)" }}
+          >
+            {t("jumpBackIn.forget")}
+          </MainMenu.Item>
+        </>
       )}
       <MainMenu.DefaultItems.CommandPalette className="highlighted" />
       <MainMenu.DefaultItems.SearchMenu />
@@ -78,7 +114,15 @@ export const AppMainMenu: React.FC<{
         </MainMenu.Item>
       )}
       <MainMenu.Separator />
-      <MainMenu.DefaultItems.Preferences />
+      <MainMenu.DefaultItems.Preferences
+        additionalItems={
+          <AutosavePreferencesItems
+            onRestoreScene={props.onRestoreAutosavedScene}
+            onAutosaveStateChanged={props.onAutosaveStateChanged}
+            onRetryAutosave={props.onRetryAutosave}
+          />
+        }
+      />
       <MainMenu.DefaultItems.ToggleTheme allowSystemTheme theme={props.theme} />
       <MainMenu.ItemCustom>
         <LanguageList style={{ width: "100%" }} />

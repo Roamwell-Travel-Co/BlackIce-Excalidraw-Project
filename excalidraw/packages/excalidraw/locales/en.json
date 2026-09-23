@@ -582,6 +582,14 @@
     "unrecognizedLinkFormat": "The link you embedded does not match the expected format. Please try to paste the 'embed' string provided by the source site",
     "elementLinkCopied": "Link copied to clipboard"
   },
+  "jumpBackIn": {
+    "rememberPrompt": "Remember this collaboration on this browser? Clearing browser data will remove it.",
+    "rememberAction": "Remember",
+    "rememberedConfirmation": "Collaboration remembered on this browser.",
+    "rememberError": "Couldn't remember this collaboration.",
+    "jumpBackIn": "Jump Back In",
+    "forget": "Delete Jump Back In collaboration"
+  },
   "colors": {
     "transparent": "Transparent",
     "black": "Black",
@@ -748,6 +756,31 @@
     },
     "itemNotAvailable": "Command is not available...",
     "shortcutHint": "For Command palette, use {{shortcut}}"
+  },
+  "storageDisclosure": {
+    "messagePrefix": "Your data integrity is important to us. Excalidraw saves your data within the browser cache. If you would also like to automatically save Excalidraw's data elsewhere on your machine,",
+    "clickHere": "click here",
+    "messageSuffix": ". If you change your mind later, please look in settings to change it.",
+    "dismiss": "Dismiss"
+  },
+  "autosave": {
+    "statusBrowserOnly": "Autosaving to disk: Browser only",
+    "statusFolder": "Autosaving to: {{folder}}",
+    "toggle": "Autosave to disk",
+    "choose": "Choose autosave location...",
+    "change": "Change autosave location...",
+    "reset": "Reset autosave location",
+    "pausedPermission": "Autosave paused -- click to resume",
+    "resume": "Resume autosave",
+    "folderNotFound": "Autosave folder no longer available -- choose a new one",
+    "quotaExceeded": "Autosave disk is full",
+    "retrying": "Autosave temporarily unavailable -- retrying",
+    "restoreDialog": {
+      "title": "Found a previous autosave",
+      "message": "Found a previous autosave from {{timestamp}}. Restore it into your current canvas, or keep what's on your canvas now and start fresh here?",
+      "restore": "Restore",
+      "startFresh": "Start fresh here"
+    }
   },
   "keys": {
     "ctrl": "Ctrl",

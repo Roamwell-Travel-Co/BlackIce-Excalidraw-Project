@@ -40,13 +40,20 @@ export const STORAGE_KEYS = {
   LOCAL_STORAGE_ELEMENTS: "excalidraw",
   LOCAL_STORAGE_APP_STATE: "excalidraw-state",
   LOCAL_STORAGE_COLLAB: "excalidraw-collab",
+  RECENT_COLLABORATION: "excalidraw-recent-collaboration",
   LOCAL_STORAGE_THEME: "excalidraw-theme",
   LOCAL_STORAGE_DEBUG: "excalidraw-debug",
   VERSION_DATA_STATE: "version-dataState",
   VERSION_FILES: "version-files",
 
+  // PRD1 (autosave-elsewhere / folder mirror)
+  STORAGE_DISCLOSURE_SEEN: "excalidraw-storage-disclosure-seen",
+  AUTOSAVE_ENABLED: "excalidraw-autosave-enabled",
+  MIRROR_STATE_VERSION: "excalidraw-mirror-state-version",
+
   IDB_LIBRARY: "excalidraw-library",
   IDB_TTD_CHATS: "excalidraw-ttd-chats",
+  IDB_FOLDER_MIRROR: "excalidraw-folder-mirror",
 
   // do not use apart from migrations
   __LEGACY_LOCAL_STORAGE_LIBRARY: "excalidraw-library",

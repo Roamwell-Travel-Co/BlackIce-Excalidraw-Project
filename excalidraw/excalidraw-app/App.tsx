@@ -15,6 +15,7 @@ import {
   DEFAULT_CATEGORIES,
 } from "@excalidraw/excalidraw/components/CommandPalette/CommandPalette";
 import { ErrorDialog } from "@excalidraw/excalidraw/components/ErrorDialog";
+import { Button } from "@excalidraw/excalidraw/components/Button";
 import { OverwriteConfirmDialog } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirm";
 import { openConfirmModal } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirmState";
 import { ShareableLinkDialog } from "@excalidraw/excalidraw/components/ShareableLinkDialog";
@@ -106,10 +107,12 @@ import {
   ExportToExcalidrawPlus,
   exportToExcalidrawPlus,
 } from "./components/ExportToExcalidrawPlus";
+import { StorageDisclosureBanner } from "./components/StorageDisclosureBanner";
 import { TopErrorBoundary } from "./components/TopErrorBoundary";
 
 import {
   exportToBackend,
+  getCollaborationLink,
   getCollaborationLinkData,
   importFromBackend,
   isCollaborationLink,
@@ -117,10 +120,27 @@ import {
 
 import { updateStaleImageStatuses } from "./data/FileManager";
 import { FileStatusStore } from "./data/fileStatusStore";
+import { getStoredMirrorDirectoryHandle } from "./data/folderMirror";
+import {
+  FolderMirrorRuntime,
+  mirrorStatusAtom,
+} from "./data/folderMirrorRuntime";
+import { isAutosaveEnabled } from "./data/folderMirrorSettings";
 import {
   importFromLocalStorage,
   importUsernameFromLocalStorage,
 } from "./data/localStorage";
+import {
+  getRememberedCollaboration,
+  forgetRememberedCollaboration,
+  markRememberedCollaborationLeft,
+  markRememberedCollaborationUsed,
+  markSecondSessionCounted,
+  markSecondSessionWindowMissed,
+  rememberCollaboration,
+  shouldCountSecondSession,
+  shouldMarkSecondSessionWindowMissed,
+} from "./data/rememberedCollaboration";
 
 import { loadFilesFromFirebase } from "./data/firebase";
 import {
@@ -213,6 +233,14 @@ const shareableLinkConfirmDialog = {
   actionLabel: t("overwriteConfirm.modal.shareableLink.button"),
   color: "danger",
 } as const;
+
+const getCollaborationSignature = ({
+  roomId,
+  roomKey,
+}: {
+  roomId: string;
+  roomKey: string;
+}) => `${roomId}:${roomKey}`;
 
 const initializeScene = async (opts: {
   collabAPI: CollabAPI | null;
@@ -390,6 +418,8 @@ const ExcalidrawWrapper = () => {
   const initialStatePromiseRef = useRef<{
     promise: ResolvablePromise<ExcalidrawInitialDataState | null>;
   }>({ promise: null! });
+  const rememberPromptTimerRef = useRef<number | null>(null);
+  const suppressedRememberPromptRef = useRef<string | null>(null);
   if (!initialStatePromiseRef.current.promise) {
     initialStatePromiseRef.current.promise =
       resolvablePromise<ExcalidrawInitialDataState | null>();
@@ -412,6 +442,363 @@ const ExcalidrawWrapper = () => {
   });
   const collabError = useAtomValue(collabErrorIndicatorAtom);
   const userToFollow = useAtomValue(userToFollowAtom);
+  const [rememberedCollaboration, setRememberedCollaboration] = useState(() =>
+    getRememberedCollaboration(),
+  );
+
+  const offerRememberCollaboration = useCallback(() => {
+    if (!excalidrawAPI) {
+      return;
+    }
+
+    if (rememberPromptTimerRef.current !== null) {
+      window.clearTimeout(rememberPromptTimerRef.current);
+    }
+
+    // Collaboration startup can update the editor state after its promise
+    // resolves. Defer this non-blocking prompt until that work has settled so
+    // the editor doesn't replace it before the guest can act on it.
+    rememberPromptTimerRef.current = window.setTimeout(() => {
+      rememberPromptTimerRef.current = null;
+
+      const roomLinkData = getCollaborationLinkData(window.location.href);
+      if (!roomLinkData) {
+        suppressedRememberPromptRef.current = null;
+        return;
+      }
+
+      if (
+        suppressedRememberPromptRef.current ===
+        getCollaborationSignature(roomLinkData)
+      ) {
+        return;
+      }
+
+      const rememberedCollaboration = getRememberedCollaboration();
+      if (
+        rememberedCollaboration?.roomId === roomLinkData.roomId &&
+        rememberedCollaboration.roomKey === roomLinkData.roomKey
+      ) {
+        return;
+      }
+
+      excalidrawAPI.setToast({
+        message: (
+          <div
+            style={{
+              alignItems: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.5rem",
+            }}
+          >
+            <span>{t("jumpBackIn.rememberPrompt")}</span>
+            <Button
+              aria-label={t("jumpBackIn.rememberAction")}
+              style={{
+                backgroundColor: "transparent",
+                border: "none",
+                color: "var(--text-primary-color)",
+                gap: "0.5rem",
+                height: "auto",
+                padding: "0.25rem 0.5rem",
+                pointerEvents: "auto",
+                width: "auto",
+              }}
+              onSelect={() => {
+                const record = rememberCollaboration(roomLinkData);
+                setRememberedCollaboration(record);
+                excalidrawAPI.setToast({
+                  message: record
+                    ? t("jumpBackIn.rememberedConfirmation")
+                    : t("jumpBackIn.rememberError"),
+                  closable: true,
+                });
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  backgroundColor: "var(--color-primary)",
+                  borderRadius: "0.25rem",
+                  display: "block",
+                  height: "0.875rem",
+                  width: "0.875rem",
+                }}
+              />
+              <span>{t("jumpBackIn.rememberAction")}</span>
+            </Button>
+          </div>
+        ),
+        closable: true,
+        duration: Infinity,
+      });
+    }, 1000);
+  }, [excalidrawAPI]);
+
+  useEffect(() => {
+    return () => {
+      if (rememberPromptTimerRef.current !== null) {
+        window.clearTimeout(rememberPromptTimerRef.current);
+      }
+    };
+  }, []);
+
+  const jumpBackIn = useCallback(() => {
+    if (!rememberedCollaboration) {
+      return;
+    }
+
+    const updatedRecord = markRememberedCollaborationUsed();
+    if (updatedRecord) {
+      setRememberedCollaboration(updatedRecord);
+    }
+    window.location.assign(getCollaborationLink(rememberedCollaboration));
+  }, [rememberedCollaboration]);
+
+  const forgetCollaboration = useCallback(() => {
+    const roomLinkData = getCollaborationLinkData(window.location.href);
+    const isDeletingCurrentRoom =
+      rememberedCollaboration &&
+      roomLinkData &&
+      getCollaborationSignature(rememberedCollaboration) ===
+        getCollaborationSignature(roomLinkData);
+
+    if (isDeletingCurrentRoom) {
+      suppressedRememberPromptRef.current = getCollaborationSignature(
+        rememberedCollaboration,
+      );
+      if (rememberPromptTimerRef.current !== null) {
+        window.clearTimeout(rememberPromptTimerRef.current);
+        rememberPromptTimerRef.current = null;
+      }
+      excalidrawAPI?.setToast(null);
+    }
+    forgetRememberedCollaboration();
+    setRememberedCollaboration(null);
+  }, [excalidrawAPI, rememberedCollaboration]);
+
+  const isCurrentCollaborationRemembered = Boolean(
+    rememberedCollaboration &&
+      (() => {
+        const roomLinkData = getCollaborationLinkData(window.location.href);
+        return (
+          roomLinkData &&
+          getCollaborationSignature(rememberedCollaboration) ===
+            getCollaborationSignature(roomLinkData)
+        );
+      })(),
+  );
+
+  // Decision 012 gap: createdAt/lastUsedAt alone can't say whether the
+  // user ever left the remembered room, which the "successful second
+  // session" definition requires. Snapshot the room while collaborating
+  // -- by the time isCollaborating flips false on a hashchange-away,
+  // location.href already points elsewhere, so we can't re-derive it then.
+  const activeCollabRoomRef = useRef<ReturnType<
+    typeof getCollaborationLinkData
+  > | null>(null);
+  // Decision 013: the KPI numerator (D-H, extending the existing
+  // trackEvent plumbing) -- fired once per arrival into the remembered
+  // room, keyed on room signature so re-renders mid-session (e.g. the
+  // leave-marking below updating rememberedCollaboration) can't re-fire it.
+  const secondSessionCheckedRoomRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isCollaborating) {
+      const roomLinkData = getCollaborationLinkData(window.location.href);
+      activeCollabRoomRef.current = roomLinkData;
+
+      if (
+        roomLinkData &&
+        rememberedCollaboration &&
+        getCollaborationSignature(rememberedCollaboration) ===
+          getCollaborationSignature(roomLinkData)
+      ) {
+        const signature = getCollaborationSignature(roomLinkData);
+        if (secondSessionCheckedRoomRef.current !== signature) {
+          secondSessionCheckedRoomRef.current = signature;
+          if (shouldCountSecondSession(rememberedCollaboration)) {
+            trackEvent("jump_back_in", "successful_second_session");
+            const updatedRecord = markSecondSessionCounted();
+            if (updatedRecord) {
+              setRememberedCollaboration(updatedRecord);
+            }
+          }
+        }
+      }
+      return;
+    }
+
+    secondSessionCheckedRoomRef.current = null;
+    const leftRoomLinkData = activeCollabRoomRef.current;
+    activeCollabRoomRef.current = null;
+
+    if (
+      !leftRoomLinkData ||
+      !rememberedCollaboration ||
+      getCollaborationSignature(rememberedCollaboration) !==
+        getCollaborationSignature(leftRoomLinkData)
+    ) {
+      return;
+    }
+
+    const updatedRecord = markRememberedCollaborationLeft();
+    if (updatedRecord) {
+      setRememberedCollaboration(updatedRecord);
+    }
+  }, [isCollaborating, rememberedCollaboration]);
+
+  // Same tracking, for the case an in-session effect can't catch: the tab
+  // closing/refreshing while still connected. Own listeners on just
+  // BEFORE_UNLOAD/UNLOAD (not BLUR/VISIBILITY_CHANGE, unlike the mirror's
+  // hide/unload flush below) -- switching tabs isn't leaving the room.
+  useEffect(() => {
+    const markLeftOnUnload = () => {
+      if (!collabAPI?.isCollaborating() || !rememberedCollaboration) {
+        return;
+      }
+      const roomLinkData = getCollaborationLinkData(window.location.href);
+      if (
+        roomLinkData &&
+        getCollaborationSignature(rememberedCollaboration) ===
+          getCollaborationSignature(roomLinkData)
+      ) {
+        markRememberedCollaborationLeft();
+      }
+    };
+    window.addEventListener(EVENT.BEFORE_UNLOAD, markLeftOnUnload);
+    window.addEventListener(EVENT.UNLOAD, markLeftOnUnload);
+    return () => {
+      window.removeEventListener(EVENT.BEFORE_UNLOAD, markLeftOnUnload);
+      window.removeEventListener(EVENT.UNLOAD, markLeftOnUnload);
+    };
+  }, [collabAPI, rememberedCollaboration]);
+
+  // The 7-day half of the KPI: unlike the leave-tracking effects above,
+  // this doesn't require being in the remembered room at all -- it only
+  // needs the app to load with the record still unresolved past the 7-day
+  // mark, so it's independent of `isCollaborating` and just re-checks
+  // whenever `rememberedCollaboration` changes (each check is a no-op once
+  // already counted or already marked missed).
+  useEffect(() => {
+    if (
+      !rememberedCollaboration ||
+      !shouldMarkSecondSessionWindowMissed(rememberedCollaboration)
+    ) {
+      return;
+    }
+
+    trackEvent("jump_back_in", "second_session_window_missed");
+    const updatedRecord = markSecondSessionWindowMissed();
+    if (updatedRecord) {
+      setRememberedCollaboration(updatedRecord);
+    }
+  }, [rememberedCollaboration]);
+
+  // PRD1 Phase D+E: the folder mirror. Independent of LocalData's own
+  // save path (error isolation, 3.7) -- never awaited inline with it,
+  // and not gated by LocalData.isSavePaused() since, per Decision 010,
+  // the mirror writes during collaboration too, unlike the localStorage
+  // save it deliberately doesn't share a pause lock with.
+  const latestMirrorSceneRef = useRef<{
+    elements: readonly OrderedExcalidrawElement[];
+    appState: AppState;
+    files: BinaryFiles;
+  } | null>(null);
+  const mirrorDirectoryHandleRef = useRef<FileSystemDirectoryHandle | null>(
+    null,
+  );
+  const refreshMirrorDirectoryHandle = useCallback(async () => {
+    if (!isAutosaveEnabled()) {
+      mirrorDirectoryHandleRef.current = null;
+      return;
+    }
+    mirrorDirectoryHandleRef.current =
+      (await getStoredMirrorDirectoryHandle()) ?? null;
+  }, []);
+  const [mirrorRuntime] = useState(
+    () =>
+      new FolderMirrorRuntime({
+        getDirectoryHandle: () => mirrorDirectoryHandleRef.current,
+        getSceneSnapshot: () => {
+          // getDirectoryHandle only returns non-null once a scene has
+          // been captured at least once, so this is never read before
+          // latestMirrorSceneRef is populated.
+          return latestMirrorSceneRef.current!;
+        },
+        onStatusChange: (status) => {
+          appJotaiStore.set(mirrorStatusAtom, status);
+        },
+      }),
+  );
+  useEffect(() => {
+    refreshMirrorDirectoryHandle();
+  }, [refreshMirrorDirectoryHandle]);
+  useEffect(() => {
+    mirrorRuntime.setCollaborating(isCollaborating);
+    if (!isCollaborating) {
+      // the moment a collab session ends, mirror the just-finished
+      // scene rather than waiting for the next solo-editing debounce
+      // (§1.2) -- the dirty-check inside flush() is a no-op if nothing
+      // actually changed since the last periodic collab write.
+      mirrorRuntime.flush().catch((error) => console.error(error));
+    }
+  }, [isCollaborating, mirrorRuntime]);
+  useEffect(() => () => mirrorRuntime.dispose(), [mirrorRuntime]);
+
+  // Flush on hide/unload, mirroring what LocalData.flushSave() already
+  // does at these same moments -- kept as its own independent effect
+  // (own listeners, own deps array) rather than folded into the
+  // existing hashchange/visibility or beforeunload effects below, so
+  // this never has to touch those shared effects' bodies or dependency
+  // arrays (error isolation, 3.7).
+  useEffect(() => {
+    const flush = () => {
+      mirrorRuntime.flush().catch((error) => console.error(error));
+    };
+    // On BLUR, always flush (matches LocalData.flushSave()'s own
+    // BLUR-always-flushes rule); on VISIBILITY_CHANGE, only when the
+    // tab is actually the one becoming hidden, not on every toggle.
+    const onVisibilityOrBlur = (event: FocusEvent | Event) => {
+      if (event.type === EVENT.BLUR || document.hidden) {
+        flush();
+      }
+    };
+    window.addEventListener(EVENT.BEFORE_UNLOAD, flush);
+    window.addEventListener(EVENT.UNLOAD, flush);
+    window.addEventListener(EVENT.BLUR, onVisibilityOrBlur);
+    document.addEventListener(EVENT.VISIBILITY_CHANGE, onVisibilityOrBlur);
+    return () => {
+      window.removeEventListener(EVENT.BEFORE_UNLOAD, flush);
+      window.removeEventListener(EVENT.UNLOAD, flush);
+      window.removeEventListener(EVENT.BLUR, onVisibilityOrBlur);
+      document.removeEventListener(EVENT.VISIBILITY_CHANGE, onVisibilityOrBlur);
+    };
+  }, [mirrorRuntime]);
+
+  // Shared by both places a restored snapshot can be loaded: the
+  // Preferences composite block and the startup disclosure banner's
+  // "click here" (see useMirrorFolderChooser.ts).
+  const loadRestoredMirrorScene = useCallback(
+    (scene: RestoredDataState) => {
+      if (!excalidrawAPI) {
+        return;
+      }
+      if (scene.files && Object.keys(scene.files).length) {
+        excalidrawAPI.addFiles(Object.values(scene.files));
+      }
+      excalidrawAPI.updateScene({
+        elements: scene.elements,
+        appState: scene.appState,
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+    },
+    [excalidrawAPI],
+  );
+  const handleMirrorFolderChosen = useCallback(() => {
+    mirrorRuntime.resetDirtyState();
+    refreshMirrorDirectoryHandle();
+  }, [mirrorRuntime, refreshMirrorDirectoryHandle]);
 
   const viewportStatusFrame = useMemo(
     () =>
@@ -565,6 +952,7 @@ const ExcalidrawWrapper = () => {
     initializeScene({ collabAPI, excalidrawAPI }).then(async (data) => {
       loadImages(data, /* isInitialLoad */ true);
       initialStatePromiseRef.current.promise.resolve(data.scene);
+      offerRememberCollaboration();
     });
 
     const onHashChange = async (event: HashChangeEvent) => {
@@ -590,6 +978,7 @@ const ExcalidrawWrapper = () => {
               captureUpdate: CaptureUpdateAction.IMMEDIATELY,
             });
           }
+          offerRememberCollaboration();
         });
       }
     };
@@ -685,7 +1074,14 @@ const ExcalidrawWrapper = () => {
         false,
       );
     };
-  }, [isCollabDisabled, collabAPI, excalidrawAPI, setLangCode, loadImages]);
+  }, [
+    isCollabDisabled,
+    collabAPI,
+    excalidrawAPI,
+    setLangCode,
+    loadImages,
+    offerRememberCollaboration,
+  ]);
 
   useEffect(() => {
     const unloadHandler = (event: BeforeUnloadEvent) => {
@@ -720,6 +1116,11 @@ const ExcalidrawWrapper = () => {
     if (collabAPI?.isCollaborating()) {
       collabAPI.syncElements(elements);
     }
+
+    // independent of LocalData's own save path below (error isolation,
+    // 3.7) -- notifyChange only schedules a timer and never throws.
+    latestMirrorSceneRef.current = { elements, appState, files };
+    mirrorRuntime.notifyChange();
 
     // this check is redundant, but since this is a hot path, it's best
     // not to evaludate the nested expression every time
@@ -1029,10 +1430,19 @@ const ExcalidrawWrapper = () => {
       >
         <AppMainMenu
           onCollabDialogOpen={onCollabDialogOpen}
+          onJumpBackIn={jumpBackIn}
+          onForgetCollaboration={forgetCollaboration}
           isCollaborating={isCollaborating}
           isCollabEnabled={!isCollabDisabled}
+          rememberedCollaboration={rememberedCollaboration}
+          isCurrentCollaborationRemembered={isCurrentCollaborationRemembered}
           theme={appTheme}
           refresh={() => forceRefresh((prev) => !prev)}
+          onRestoreAutosavedScene={loadRestoredMirrorScene}
+          onAutosaveStateChanged={handleMirrorFolderChosen}
+          onRetryAutosave={() => {
+            mirrorRuntime.flush().catch((error) => console.error(error));
+          }}
         />
         <AppWelcomeScreen
           onCollabDialogOpen={onCollabDialogOpen}
@@ -1072,6 +1482,10 @@ const ExcalidrawWrapper = () => {
             {t("alerts.localStorageQuotaExceeded")}
           </div>
         )}
+        <StorageDisclosureBanner
+          onRestoreScene={loadRestoredMirrorScene}
+          onAutosaveStateChanged={handleMirrorFolderChosen}
+        />
         {latestShareableLink && (
           <ShareableLinkDialog
             link={latestShareableLink}

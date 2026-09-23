@@ -1,0 +1,45 @@
+.StorageDisclosureBanner {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: var(--zIndex-layerUI);
+
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(90vw, 40rem);
+
+  padding: 0.75rem 1rem;
+  border-radius: var(--border-radius-lg);
+  background-color: var(--island-bg-color);
+  box-shadow: var(--shadow-island);
+
+  font-family: var(--ui-font);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--color-on-surface);
+
+  &__message {
+    flex: 1;
+  }
+
+  &__link {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: var(--color-primary);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--color-primary-hover);
+    }
+  }
+
+  &__close {
+    flex-shrink: 0;
+  }
+}
