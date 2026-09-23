@@ -8,8 +8,10 @@ import {
   markRememberedCollaborationLeft,
   markRememberedCollaborationUsed,
   markSecondSessionCounted,
+  markSecondSessionWindowMissed,
   rememberCollaboration,
   shouldCountSecondSession,
+  shouldMarkSecondSessionWindowMissed,
 } from "../data/rememberedCollaboration";
 
 const roomKey1 = "1234567890123456789012";
@@ -31,6 +33,7 @@ describe("remembered collaboration storage", () => {
       lastUsedAt: 100,
       leftAt: null,
       secondSessionCountedAt: null,
+      secondSessionWindowMissedAt: null,
     });
 
     expect(getRememberedCollaboration()).toEqual({
@@ -40,6 +43,7 @@ describe("remembered collaboration storage", () => {
       lastUsedAt: 100,
       leftAt: null,
       secondSessionCountedAt: null,
+      secondSessionWindowMissedAt: null,
     });
   });
 
@@ -54,6 +58,7 @@ describe("remembered collaboration storage", () => {
       lastUsedAt: 200,
       leftAt: null,
       secondSessionCountedAt: null,
+      secondSessionWindowMissedAt: null,
     });
   });
 
@@ -67,6 +72,7 @@ describe("remembered collaboration storage", () => {
       lastUsedAt: 200,
       leftAt: null,
       secondSessionCountedAt: null,
+      secondSessionWindowMissedAt: null,
     });
   });
 
@@ -80,6 +86,7 @@ describe("remembered collaboration storage", () => {
       lastUsedAt: 100,
       leftAt: 150,
       secondSessionCountedAt: null,
+      secondSessionWindowMissedAt: null,
     });
   });
 
@@ -98,6 +105,7 @@ describe("remembered collaboration storage", () => {
       lastUsedAt: 100,
       leftAt: 150,
       secondSessionCountedAt: 200,
+      secondSessionWindowMissedAt: null,
     });
   });
 
@@ -105,7 +113,25 @@ describe("remembered collaboration storage", () => {
     expect(markSecondSessionCounted(200)).toBeNull();
   });
 
-  it("treats a legacy record with no leftAt/secondSessionCountedAt fields as not set", () => {
+  it("marks the second-session window missed, independent of other fields", () => {
+    rememberCollaboration({ roomId: "room-1", roomKey: roomKey1 }, 100);
+
+    expect(markSecondSessionWindowMissed(200)).toEqual({
+      roomId: "room-1",
+      roomKey: roomKey1,
+      createdAt: 100,
+      lastUsedAt: 100,
+      leftAt: null,
+      secondSessionCountedAt: null,
+      secondSessionWindowMissedAt: 200,
+    });
+  });
+
+  it("returns null from markSecondSessionWindowMissed when nothing is remembered", () => {
+    expect(markSecondSessionWindowMissed(200)).toBeNull();
+  });
+
+  it("treats a legacy record with none of the tracking fields as not set", () => {
     localStorage.setItem(
       STORAGE_KEYS.RECENT_COLLABORATION,
       JSON.stringify({
@@ -123,6 +149,7 @@ describe("remembered collaboration storage", () => {
       lastUsedAt: 100,
       leftAt: null,
       secondSessionCountedAt: null,
+      secondSessionWindowMissedAt: null,
     });
   });
 
@@ -156,6 +183,90 @@ describe("remembered collaboration storage", () => {
       const left = { ...record, leftAt: 100 };
 
       expect(isSuccessfulSecondSession(left, DAY_MS + 1)).toBe(true);
+    });
+
+    it("is true right at the 7-day boundary", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+      const left = { ...record, leftAt: 100 };
+
+      expect(isSuccessfulSecondSession(left, DAY_MS * 7)).toBe(true);
+    });
+
+    it("is false once more than 7 days have passed, even if the user left -- this is the 7-day KPI, not eventually", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+      const left = { ...record, leftAt: 100 };
+
+      expect(isSuccessfulSecondSession(left, DAY_MS * 7 + 1)).toBe(false);
+    });
+  });
+
+  describe("shouldMarkSecondSessionWindowMissed (the 7-day KPI's failure case)", () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    it("is false before 7 days have passed", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+
+      expect(shouldMarkSecondSessionWindowMissed(record, DAY_MS * 7)).toBe(
+        false,
+      );
+    });
+
+    it("is true once more than 7 days have passed with no successful second session", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+
+      expect(shouldMarkSecondSessionWindowMissed(record, DAY_MS * 7 + 1)).toBe(
+        true,
+      );
+    });
+
+    it("is true even if the user never left -- leaving was only ever a means to the 24h+left criteria, which can no longer be met", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+
+      expect(shouldMarkSecondSessionWindowMissed(record, DAY_MS * 30)).toBe(
+        true,
+      );
+    });
+
+    it("is false if a successful second session was already counted", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+      const counted = { ...record, leftAt: 100, secondSessionCountedAt: 200 };
+
+      expect(shouldMarkSecondSessionWindowMissed(counted, DAY_MS * 30)).toBe(
+        false,
+      );
+    });
+
+    it("is false once already marked missed", () => {
+      const record = rememberCollaboration(
+        { roomId: "room-1", roomKey: roomKey1 },
+        0,
+      )!;
+      const alreadyMissed = {
+        ...record,
+        secondSessionWindowMissedAt: DAY_MS * 8,
+      };
+
+      expect(
+        shouldMarkSecondSessionWindowMissed(alreadyMissed, DAY_MS * 30),
+      ).toBe(false);
     });
   });
 

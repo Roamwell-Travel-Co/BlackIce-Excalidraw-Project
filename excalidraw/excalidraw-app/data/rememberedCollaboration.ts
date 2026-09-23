@@ -13,9 +13,16 @@ export type RememberedCollaboration = Readonly<{
   // null if it hasn't yet. Without this, every later qualifying return to
   // the same room would re-fire "successful second session".
   secondSessionCountedAt: number | null;
+  // When this room was found to have missed the 7-day KPI window (more than
+  // 7 days old, never counted a successful second session), or null if
+  // that hasn't been determined yet. Only the fact of the miss matters for
+  // the KPI, not exactly when it was detected -- this field exists purely
+  // to gate the one-time check below from re-firing.
+  secondSessionWindowMissedAt: number | null;
 }>;
 
 const SUCCESSFUL_SECOND_SESSION_MIN_GAP_MS = 24 * 60 * 60 * 1000;
+const SUCCESSFUL_SECOND_SESSION_MAX_GAP_MS = 7 * 24 * 60 * 60 * 1000;
 
 type RememberedCollaborationInput = Pick<
   RememberedCollaboration,
@@ -55,7 +62,8 @@ const isValidRememberedCollaboration = (
     isValidTimestamp(record.createdAt) &&
     isValidTimestamp(record.lastUsedAt) &&
     isValidNullableTimestamp(record.leftAt) &&
-    isValidNullableTimestamp(record.secondSessionCountedAt)
+    isValidNullableTimestamp(record.secondSessionCountedAt) &&
+    isValidNullableTimestamp(record.secondSessionWindowMissedAt)
   );
 };
 
@@ -111,6 +119,8 @@ export const getRememberedCollaboration =
           ...record,
           leftAt: record.leftAt ?? null,
           secondSessionCountedAt: record.secondSessionCountedAt ?? null,
+          secondSessionWindowMissedAt:
+            record.secondSessionWindowMissedAt ?? null,
         };
       }
     } catch (error: any) {
@@ -140,6 +150,7 @@ export const rememberCollaboration = (
     lastUsedAt: now,
     leftAt: null,
     secondSessionCountedAt: null,
+    secondSessionWindowMissedAt: null,
   };
 
   return saveRememberedCollaboration(record);
@@ -226,14 +237,21 @@ export const forgetRememberedCollaboration = () => {
  * successful second session if it happens more than 24h after the room
  * was created AND the user left the room at some point before returning.
  * Another collaborator's presence at return time is explicitly not part
- * of this definition.
+ * of this definition. Bounded above at 7 days -- this is specifically the
+ * 7-day return KPI, not "eventually returned"; a return past that window
+ * is handled separately, as a miss, by `shouldMarkSecondSessionWindowMissed`.
  */
 export const isSuccessfulSecondSession = (
   record: RememberedCollaboration,
   now = Date.now(),
-): boolean =>
-  record.leftAt !== null &&
-  now - record.createdAt > SUCCESSFUL_SECOND_SESSION_MIN_GAP_MS;
+): boolean => {
+  const age = now - record.createdAt;
+  return (
+    record.leftAt !== null &&
+    age > SUCCESSFUL_SECOND_SESSION_MIN_GAP_MS &&
+    age <= SUCCESSFUL_SECOND_SESSION_MAX_GAP_MS
+  );
+};
 
 /**
  * Whether this return should fire the KPI event: meets Decision 012's
@@ -245,3 +263,43 @@ export const shouldCountSecondSession = (
 ): boolean =>
   record.secondSessionCountedAt === null &&
   isSuccessfulSecondSession(record, now);
+
+/**
+ * Marks that this room missed the 7-day KPI window entirely: more than 7
+ * days old, and no successful second session was ever counted. Only the
+ * fact of the miss matters -- gates the check below from re-firing, not a
+ * timestamp anyone needs to read back.
+ */
+export const markSecondSessionWindowMissed = (
+  now = Date.now(),
+): RememberedCollaboration | null => {
+  if (!isValidTimestamp(now)) {
+    return null;
+  }
+
+  const record = getRememberedCollaboration();
+  if (!record) {
+    return null;
+  }
+
+  const updatedRecord: RememberedCollaboration = {
+    ...record,
+    secondSessionWindowMissedAt: now,
+  };
+
+  return saveRememberedCollaboration(updatedRecord);
+};
+
+/**
+ * Whether this room should now be marked as having missed the 7-day KPI
+ * window: it's more than 7 days old, a successful second session was
+ * never counted, and this hasn't already been marked. Once true, the
+ * exact day it's detected on doesn't matter -- only that it's recorded.
+ */
+export const shouldMarkSecondSessionWindowMissed = (
+  record: RememberedCollaboration,
+  now = Date.now(),
+): boolean =>
+  record.secondSessionCountedAt === null &&
+  record.secondSessionWindowMissedAt === null &&
+  now - record.createdAt > SUCCESSFUL_SECOND_SESSION_MAX_GAP_MS;

@@ -136,8 +136,10 @@ import {
   markRememberedCollaborationLeft,
   markRememberedCollaborationUsed,
   markSecondSessionCounted,
+  markSecondSessionWindowMissed,
   rememberCollaboration,
   shouldCountSecondSession,
+  shouldMarkSecondSessionWindowMissed,
 } from "./data/rememberedCollaboration";
 
 import { loadFilesFromFirebase } from "./data/firebase";
@@ -671,6 +673,27 @@ const ExcalidrawWrapper = () => {
       window.removeEventListener(EVENT.UNLOAD, markLeftOnUnload);
     };
   }, [collabAPI, rememberedCollaboration]);
+
+  // The 7-day half of the KPI: unlike the leave-tracking effects above,
+  // this doesn't require being in the remembered room at all -- it only
+  // needs the app to load with the record still unresolved past the 7-day
+  // mark, so it's independent of `isCollaborating` and just re-checks
+  // whenever `rememberedCollaboration` changes (each check is a no-op once
+  // already counted or already marked missed).
+  useEffect(() => {
+    if (
+      !rememberedCollaboration ||
+      !shouldMarkSecondSessionWindowMissed(rememberedCollaboration)
+    ) {
+      return;
+    }
+
+    trackEvent("jump_back_in", "second_session_window_missed");
+    const updatedRecord = markSecondSessionWindowMissed();
+    if (updatedRecord) {
+      setRememberedCollaboration(updatedRecord);
+    }
+  }, [rememberedCollaboration]);
 
   // PRD1 Phase D+E: the folder mirror. Independent of LocalData's own
   // save path (error isolation, 3.7) -- never awaited inline with it,

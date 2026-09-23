@@ -16,6 +16,7 @@ const rememberedCollaboration = {
   lastUsedAt: 100,
   leftAt: null,
   secondSessionCountedAt: null,
+  secondSessionWindowMissedAt: null,
 };
 
 const renderMenu = async (
