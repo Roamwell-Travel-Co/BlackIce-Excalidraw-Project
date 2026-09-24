@@ -1,0 +1,40 @@
+@import "../../packages/excalidraw/css/variables.module.scss";
+
+.excalidraw {
+  .save-my-work-button {
+    --button-width: var(--lg-button-size);
+    --button-height: var(--lg-button-size);
+
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px var(--color-surface-lowest);
+  }
+
+  .SaveMyWork {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+
+    &__status {
+      margin: 0;
+      color: var(--text-primary-color);
+
+      &--error {
+        color: var(--color-danger);
+      }
+    }
+
+    &__description {
+      margin: 0;
+      color: var(--text-primary-color);
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+
+    &__linkRow {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-end;
+      gap: 0.5rem;
+    }
+  }
+}
