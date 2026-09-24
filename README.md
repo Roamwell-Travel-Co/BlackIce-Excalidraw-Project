@@ -45,3 +45,27 @@ yarn start
 ```
 
 It's a real production monorepo (React/TypeScript, Yarn workspaces), so give `yarn install` a few minutes the first time.
+
+## Demoing the retention features locally (no waiting required)
+
+Two of our features only normally trigger after real minutes/days pass (a guest session timer, a multi-day "come back" reminder). To see them fire immediately for a demo or review, open the app with a fake collaboration link and a demo-speed override:
+
+```
+http://localhost:3001/?reconnectDemoMs=3000#room=demoroom12345,abcdefghijklmnopqrstuv
+```
+
+- The `#room=...` part makes the app treat you as a **guest** joining someone else's session (required for both features below — a host never sees these).
+- `?reconnectDemoMs=3000` makes Lola's "Circle Back" prompt fire after 3 seconds instead of the real 5-minute mark. Change the number to whatever delay you want to demo.
+
+What you'll see, in order:
+1. **Chris's "Remember this collaboration?"** toast — appears within ~1 second of loading as a guest. Click **Remember**.
+2. **Lola's "Circle Back" prompt** — fires after the `reconnectDemoMs` delay. Shows the recognized board type, a mock checklist, and a "remind me in N days" picker. Pick a day, add a reason, submit.
+3. **The "Ready to jump back in?" welcome-back prompt** — this one won't show immediately (it's date-based, not timer-based). To see it without waiting real days, open the browser console and run:
+   ```js
+   const n = JSON.parse(localStorage.getItem('excalidraw-reconnect-nudge'));
+   n.targetAt = Date.now() - 1000;
+   localStorage.setItem('excalidraw-reconnect-nudge', JSON.stringify(n));
+   ```
+   Then reload `http://localhost:3001/` (no room hash needed this time) — the welcome-back prompt appears and "Reopen the board" takes you straight back into the exact room you scheduled it from.
+
+No local collaboration server is required to see any of this — the guest-detection and both retention features work purely off the URL and browser storage, independent of a live socket connection.
